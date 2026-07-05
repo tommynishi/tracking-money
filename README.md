@@ -94,13 +94,27 @@ cd tracking-money
 
 ## パッケージインストール
 
+Next.js アプリは `frontend/` 配下にあります。
+
 ```bash
+cd frontend
 npm install
 ```
 
+## ローカルDB（Supabase）起動
+
+Supabase プロジェクトは `backend/` 配下にあります。Docker Desktop を起動した上で実行してください。
+
+```bash
+cd backend
+supabase start
+```
+
+スキーマは `backend/supabase/migrations/` のマイグレーションで適用されます（`supabase db reset` で再適用）。
+
 ## 環境変数
 
-`.env.local` を作成し、以下の情報を設定してください。変数の一覧・用途・公開範囲は docs/architecture.md 9.2 を正とします。
+`frontend/.env.local` を作成し、以下の情報を設定してください。変数の一覧・用途・公開範囲は docs/architecture.md 9.2 を正とします。
 
 ```env
 # Supabase
@@ -132,6 +146,7 @@ CRON_SECRET=
 ## 開発サーバー起動
 
 ```bash
+cd frontend
 npm run dev
 ```
 

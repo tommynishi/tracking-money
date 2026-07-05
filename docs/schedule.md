@@ -61,7 +61,7 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 
 | # | タスク | 依存 |
 | --- | --- | --- |
-| 2-1 | マイグレーション：import_files / csv_column_mappings / category_rules | Phase 1 |
+| 2-1 | マイグレーション：import_files / csv_column_mappings / category_rules ＋ ledgers へ drive_folder_id 追加（FR-DRIVE-02） | Phase 1 |
 | 2-2 | パーサー基盤（StatementParser インターフェース・文字コード判定・正規化処理） | 2-1 |
 | 2-3 | カード会社別CSVパーサー（楽天 → JCB → Epos → セゾンの順。実CSVサンプル入手が前提） | 2-2 |
 | 2-4 | 汎用CSV（列マッピングUI・保存・SCR-09 Step1分岐） | 2-2 |
@@ -118,3 +118,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | --- | --- |
 | 2026-07-05 | 初版作成 |
 | 2026-07-05 | レビュー指摘反映：ダッシュボードをPhase 1（1-9）からPhase 3（3-6）へ移動。Phase 1トップを明細一覧に変更し、完了条件を更新 |
+| 2026-07-05 | 再レビュー反映：2-1 に ledgers への drive_folder_id 追加を明記 |
