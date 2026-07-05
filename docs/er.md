@@ -44,6 +44,7 @@ erDiagram
         uuid owner_user_id FK
         text type "personal / family"
         text name
+        text drive_folder_id "DriveフォルダID・NULL可"
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -183,3 +184,4 @@ erDiagram
 | 日付 | 内容 |
 | --- | --- |
 | 2026-07-05 | 初版作成 |
+| 2026-07-05 | レビュー指摘反映：ledgers に drive_folder_id を追加（FR-DRIVE-02） |
