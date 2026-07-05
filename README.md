@@ -152,6 +152,7 @@ tracking-money/
 | database.md         | テーブル定義    |
 | api.md              | API仕様書    |
 | coding-rules.md     | コーディング規約  |
+| ui-rules.md         | UI規約      |
 | development-flow.md | 開発フロー     |
 | schedule.md         | 開発スケジュール  |
 
