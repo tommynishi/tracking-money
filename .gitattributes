@@ -1,0 +1,12 @@
+# 改行コードを LF に統一する（Prettier の endOfLine:"lf" と整合。Windows でも format:check を安定させる）。
+* text=auto eol=lf
+
+# バイナリはそのまま扱う（改行正規化しない）。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
