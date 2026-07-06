@@ -23,7 +23,7 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | # | タスク | 状態 |
 | --- | --- | --- |
 | 0-1 | 設計ドキュメント一式の作成・承認 | 完了（2026-07-05） |
-| 0-2 | Next.js プロジェクト初期化（frontend/。TypeScript strict / Tailwind / ESLint / Prettier） | 未着手 |
+| 0-2 | Next.js プロジェクト初期化（frontend/。TypeScript strict / Tailwind / ESLint / Prettier） | 完了（2026-07-06） |
 | 0-3 | Supabase プロジェクト初期化（backend/。ローカル環境・CLI） | 未着手 |
 | 0-4 | GitHub Actions CI 構築（lint / typecheck / test / build） | 未着手 |
 | 0-5 | Vercel 接続・デプロイ確認（Hello World） | 未着手 |
@@ -119,3 +119,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-05 | 初版作成 |
 | 2026-07-05 | レビュー指摘反映：ダッシュボードをPhase 1（1-9）からPhase 3（3-6）へ移動。Phase 1トップを明細一覧に変更し、完了条件を更新 |
 | 2026-07-05 | 再レビュー反映：2-1 に ledgers への drive_folder_id 追加を明記 |
+| 2026-07-06 | 0-2（Next.js初期化）完了。1-1（初期マイグレーション7テーブル）SQL作成（ローカル未適用） |
