@@ -394,6 +394,11 @@ WHERE ledger_id = $1
 * 「水道光熱費・通信費・保険・住居」は is_fixed_cost = true を初期値とする
 * 一覧の最終確定は Phase 1 実装時にユーザーへ提示して行う（requirements.md 未確定事項）
 
+家計簿作成（ledgers ＋ オーナー ledger_members ＋ 上記カテゴリ）は原子性が必要なため、
+RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categories jsonb)` に
+まとめて単一トランザクションで実行する（マイグレーション `20260706000200`）。カテゴリ内容は
+アプリの `buildDefaultCategories()` が生成して jsonb で渡す。
+
 ---
 
 # 6. マイグレーション運用
@@ -411,3 +416,4 @@ WHERE ledger_id = $1
 | --- | --- |
 | 2026-07-05 | 初版作成 |
 | 2026-07-05 | レビュー指摘反映：ledgers に drive_folder_id 追加（FR-DRIVE-02）。analysis_caches.analysis_type の値を api.md 9.6 と統一 |
+| 2026-07-06 | 家計簿作成を原子的に行う RPC 関数 `create_ledger_with_defaults` を追加（§5・マイグレーション 20260706000200） |

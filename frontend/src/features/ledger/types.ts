@@ -3,6 +3,16 @@
 /** 家計簿種別（personal=個人 / family=家族）。 */
 export type LedgerType = "personal" | "family";
 
+/** 家計簿（ledgers）のドメイン表現。 */
+export type Ledger = {
+  readonly id: string;
+  readonly ownerUserId: string;
+  readonly type: LedgerType;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+};
+
 /**
  * 家計簿作成時に投入するデフォルトカテゴリ1件の定義（database.md §5）。
  * DBのカラム名（snake_case）ではなくドメイン表現（camelCase）で保持する。
