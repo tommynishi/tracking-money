@@ -120,3 +120,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-05 | レビュー指摘反映：ダッシュボードをPhase 1（1-9）からPhase 3（3-6）へ移動。Phase 1トップを明細一覧に変更し、完了条件を更新 |
 | 2026-07-05 | 再レビュー反映：2-1 に ledgers への drive_folder_id 追加を明記 |
 | 2026-07-06 | 0-2（Next.js初期化）完了。1-1（初期マイグレーション7テーブル）SQL作成（ローカル未適用） |
+| 2026-07-06 | 1-3（認可基盤 assertLedgerAccess / assertLedgerOwner・AppError）と 1-5 の家計簿ドメイン層（作成・名称変更・論理削除の Service/Repository/RPC）を実装。Route Handler・設定画面（SCR-06）は 1-2/1-4 後に着手 |
