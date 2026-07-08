@@ -7,7 +7,7 @@ import type {
   LedgerRepository,
 } from "../repositories/ledgerRepository";
 import type { Ledger } from "../types";
-import { createLedger, renameLedger } from "./ledgerService";
+import { createLedger, deleteLedger, renameLedger } from "./ledgerService";
 
 const OWNER_ID = "11111111-1111-1111-1111-111111111111";
 const OTHER_USER_ID = "22222222-2222-2222-2222-222222222222";
@@ -36,6 +36,7 @@ const createRepositoryStub = (
     ...createdLedger,
     name,
   })),
+  deleteLedgerCascade: vi.fn(async () => undefined),
 });
 
 describe("createLedger", () => {
@@ -123,5 +124,50 @@ describe("renameLedger", () => {
       renameLedger(repository, { ledgerId: LEDGER_ID, userId: OTHER_USER_ID, name: "x" }),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.updateLedgerName).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteLedger", () => {
+  it("オーナーなら子データごと論理削除する", async () => {
+    // Arrange
+    const repository = createRepositoryStub({
+      ownsPersonalLedger: true,
+      belongsToFamilyLedger: false,
+    });
+
+    // Act
+    await deleteLedger(repository, { ledgerId: LEDGER_ID, userId: OWNER_ID });
+
+    // Assert
+    expect(repository.deleteLedgerCascade).toHaveBeenCalledWith(LEDGER_ID);
+  });
+
+  it("存在しなければ NotFoundError を投げ、削除しない", async () => {
+    // Arrange
+    const repository = createRepositoryStub({
+      ownsPersonalLedger: false,
+      belongsToFamilyLedger: false,
+    });
+    repository.getLedgerById = vi.fn(async () => null);
+
+    // Act & Assert
+    await expect(
+      deleteLedger(repository, { ledgerId: LEDGER_ID, userId: OWNER_ID }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.deleteLedgerCascade).not.toHaveBeenCalled();
+  });
+
+  it("オーナー以外なら ForbiddenError を投げ、削除しない", async () => {
+    // Arrange
+    const repository = createRepositoryStub({
+      ownsPersonalLedger: true,
+      belongsToFamilyLedger: false,
+    });
+
+    // Act & Assert
+    await expect(
+      deleteLedger(repository, { ledgerId: LEDGER_ID, userId: OTHER_USER_ID }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(repository.deleteLedgerCascade).not.toHaveBeenCalled();
   });
 });

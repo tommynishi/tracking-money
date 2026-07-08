@@ -399,6 +399,13 @@ RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categ
 まとめて単一トランザクションで実行する（マイグレーション `20260706000200`）。カテゴリ内容は
 アプリの `buildDefaultCategories()` が生成して jsonb で渡す。
 
+家計簿の論理削除（FR-LEDGER-08）も原子性が必要なため、RPC 関数
+`delete_ledger_cascade(p_ledger_id uuid)` で家計簿本体と Phase 1 子データ
+（ledger_members・categories・entries・ledger_invitations）を単一トランザクションで
+論理削除する（マイグレーション `20260706000300`）。ledger_members を同時に論理削除しないと
+§4 の認可クエリでアクセス権が残り続けるため、必ず含める。オーナー認可・存在確認は Service 層で
+事前に行う。Phase 2/3 のテーブル追加時はこの関数へ削除対象を追記する。
+
 ---
 
 # 6. マイグレーション運用
@@ -417,3 +424,4 @@ RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categ
 | 2026-07-05 | 初版作成 |
 | 2026-07-05 | レビュー指摘反映：ledgers に drive_folder_id 追加（FR-DRIVE-02）。analysis_caches.analysis_type の値を api.md 9.6 と統一 |
 | 2026-07-06 | 家計簿作成を原子的に行う RPC 関数 `create_ledger_with_defaults` を追加（§5・マイグレーション 20260706000200） |
+| 2026-07-06 | 家計簿を子データごと論理削除する RPC 関数 `delete_ledger_cascade` を追加（§5・マイグレーション 20260706000300・FR-LEDGER-08） |

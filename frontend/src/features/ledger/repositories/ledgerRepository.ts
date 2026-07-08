@@ -13,6 +13,7 @@ import type { DefaultCategorySeed, Ledger, LedgerType } from "../types";
 const LEDGERS_TABLE = "ledgers";
 const LEDGER_MEMBERS_TABLE = "ledger_members";
 const CREATE_LEDGER_RPC = "create_ledger_with_defaults";
+const DELETE_LEDGER_RPC = "delete_ledger_cascade";
 
 /** 一意制約違反（Postgres）。同時実行で個人/家族の重複作成が起きた場合に返る。 */
 const UNIQUE_VIOLATION_CODE = "23505";
@@ -56,6 +57,8 @@ export type LedgerRepository = {
   getLedgerById(ledgerId: string): Promise<Ledger | null>;
   /** 家計簿の名称を更新する。更新対象が存在しなければ NotFoundError。 */
   updateLedgerName(ledgerId: string, name: string): Promise<Ledger>;
+  /** 家計簿と Phase 1 子データ（メンバー・カテゴリ・明細・招待）を原子的に論理削除する。 */
+  deleteLedgerCascade(ledgerId: string): Promise<void>;
 };
 
 export const createLedgerRepository = (client: SupabaseClient): LedgerRepository => ({
@@ -147,5 +150,13 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
     }
 
     return toLedger(ledgerRowSchema.parse(data));
+  },
+
+  async deleteLedgerCascade(ledgerId) {
+    const { error } = await client.rpc(DELETE_LEDGER_RPC, { p_ledger_id: ledgerId });
+
+    if (error) {
+      throw new Error(`Failed to delete ledger: ${error.message}`);
+    }
   },
 });

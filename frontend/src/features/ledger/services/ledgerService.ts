@@ -58,3 +58,26 @@ export const renameLedger = async (
 
   return repository.updateLedgerName(input.ledgerId, input.name);
 };
+
+export type DeleteLedgerInput = {
+  readonly ledgerId: string;
+  readonly userId: string;
+};
+
+/**
+ * 家計簿を論理削除する（FR-LEDGER-08・api.md 3.5）。オーナーのみ実行できる。
+ * 家計簿本体と子データ（メンバー・カテゴリ・明細・招待）を原子的に論理削除する。
+ * 削除前のユーザー確認は UI（SCR-06）の責務とする。
+ */
+export const deleteLedger = async (
+  repository: LedgerRepository,
+  input: DeleteLedgerInput,
+): Promise<void> => {
+  const ledger = await repository.getLedgerById(input.ledgerId);
+  if (ledger === null) {
+    throw new NotFoundError("家計簿が見つかりません");
+  }
+  assertLedgerOwner(ledger, input.userId);
+
+  await repository.deleteLedgerCascade(input.ledgerId);
+};
