@@ -8,12 +8,16 @@ import {
 } from "@/shared/errors/appError";
 import type { Ledger } from "@/features/ledger/types";
 
+import type { FamilyMembership } from "@/features/ledger/repositories/ledgerRepository";
+
 import type { InvitationRepository } from "../repositories/invitationRepository";
 import type { Invitation } from "../types";
 import {
+  acceptInvitation,
   cancelInvitation,
   createInvitation,
   declineInvitation,
+  type AcceptInvitationDeps,
   type InvitationServiceDeps,
 } from "./invitationService";
 
@@ -48,6 +52,17 @@ const createInvitationRepoStub = (): InvitationRepository => ({
   listForUser: vi.fn(async () => [pendingInvitation]),
   markResponded: vi.fn(async (_id, status) => ({ ...pendingInvitation, status })),
   cancel: vi.fn(async () => ({ ...pendingInvitation, status: "canceled" as const })),
+  acceptFamilyInvitation: vi.fn(async () => undefined),
+});
+
+const createAcceptDeps = (
+  family: FamilyMembership | null,
+  invitationRepository: InvitationRepository = createInvitationRepoStub(),
+): AcceptInvitationDeps => ({
+  invitationRepository,
+  ledgerRepository: {
+    getUserFamilyMembership: vi.fn(async () => family),
+  },
 });
 
 const createDeps = (
@@ -106,6 +121,64 @@ describe("createInvitation", () => {
     const deps = createDeps({ alreadyMember: true });
     await expect(createInvitation(deps, input)).rejects.toBeInstanceOf(ConflictError);
     expect(deps.invitationRepository.createPending).not.toHaveBeenCalled();
+  });
+});
+
+describe("acceptInvitation", () => {
+  const input = { invitationId: INVITATION_ID, userId: INVITEE_ID, deleteOwnFamilyLedger: false };
+  const ownedFamily: FamilyMembership = { ledgerId: "own-ledger", role: "owner" };
+  const joinedFamily: FamilyMembership = { ledgerId: "other-ledger", role: "member" };
+
+  it("家族家計簿に未所属なら参加する（削除対象なし）", async () => {
+    const repository = createInvitationRepoStub();
+    const deps = createAcceptDeps(null, repository);
+    await acceptInvitation(deps, input);
+    expect(repository.acceptFamilyInvitation).toHaveBeenCalledWith(INVITATION_ID, INVITEE_ID, null);
+  });
+
+  it("自分の家族家計簿を所有し deleteOwnFamilyLedger=true なら自帳簿を削除して参加する", async () => {
+    const repository = createInvitationRepoStub();
+    const deps = createAcceptDeps(ownedFamily, repository);
+    await acceptInvitation(deps, { ...input, deleteOwnFamilyLedger: true });
+    expect(repository.acceptFamilyInvitation).toHaveBeenCalledWith(
+      INVITATION_ID,
+      INVITEE_ID,
+      "own-ledger",
+    );
+  });
+
+  it("自分の家族家計簿を所有し false なら FAMILY_LEDGER_EXISTS で拒否する", async () => {
+    const repository = createInvitationRepoStub();
+    const deps = createAcceptDeps(ownedFamily, repository);
+    const error = await acceptInvitation(deps, input).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect((error as ConflictError).details?.[0]?.code).toBe("FAMILY_LEDGER_EXISTS");
+    expect(repository.acceptFamilyInvitation).not.toHaveBeenCalled();
+  });
+
+  it("他者の家族家計簿に参加済みなら ALREADY_FAMILY_MEMBER で拒否する（自動退出しない）", async () => {
+    const repository = createInvitationRepoStub();
+    const deps = createAcceptDeps(joinedFamily, repository);
+    const error = await acceptInvitation(deps, { ...input, deleteOwnFamilyLedger: true }).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(ConflictError);
+    expect((error as ConflictError).details?.[0]?.code).toBe("ALREADY_FAMILY_MEMBER");
+    expect(repository.acceptFamilyInvitation).not.toHaveBeenCalled();
+  });
+
+  it("招待先本人でなければ ForbiddenError", async () => {
+    const deps = createAcceptDeps(null);
+    await expect(acceptInvitation(deps, { ...input, userId: OWNER_ID })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+  });
+
+  it("pending でなければ ConflictError", async () => {
+    const repository = createInvitationRepoStub();
+    repository.getById = vi.fn(async () => ({ ...pendingInvitation, status: "accepted" as const }));
+    const deps = createAcceptDeps(null, repository);
+    await expect(acceptInvitation(deps, input)).rejects.toBeInstanceOf(ConflictError);
   });
 });
 

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ConflictError, NotFoundError } from "@/shared/errors/appError";
 
 import type { UserLedgerSummary } from "../services/ledgerCreationPolicy";
-import type { DefaultCategorySeed, Ledger, LedgerType } from "../types";
+import type { DefaultCategorySeed, Ledger, LedgerType, MemberRole } from "../types";
 
 const LEDGERS_TABLE = "ledgers";
 const LEDGER_MEMBERS_TABLE = "ledger_members";
@@ -38,6 +38,12 @@ const toLedger = (row: z.infer<typeof ledgerRowSchema>): Ledger => ({
 
 const isUniqueViolation = (error: PostgrestError): boolean => error.code === UNIQUE_VIOLATION_CODE;
 
+/** ユーザーが所属する家族家計簿と、その帳簿内での role。 */
+export type FamilyMembership = {
+  readonly ledgerId: string;
+  readonly role: MemberRole;
+};
+
 export type CreateLedgerWithDefaultsInput = {
   readonly ownerUserId: string;
   readonly type: LedgerType;
@@ -59,7 +65,14 @@ export type LedgerRepository = {
   updateLedgerName(ledgerId: string, name: string): Promise<Ledger>;
   /** 家計簿と Phase 1 子データ（メンバー・カテゴリ・明細・招待）を原子的に論理削除する。 */
   deleteLedgerCascade(ledgerId: string): Promise<void>;
+  /** ユーザーが所属する家族家計簿と role を返す。所属が無ければ null（FR-LEDGER-05）。 */
+  getUserFamilyMembership(userId: string): Promise<FamilyMembership | null>;
 };
+
+const familyMembershipRowSchema = z.object({
+  ledger_id: z.string(),
+  role: z.enum(["owner", "member"]),
+});
 
 export const createLedgerRepository = (client: SupabaseClient): LedgerRepository => ({
   async getUserLedgerSummary(userId) {
@@ -158,5 +171,25 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
     if (error) {
       throw new Error(`Failed to delete ledger: ${error.message}`);
     }
+  },
+
+  async getUserFamilyMembership(userId) {
+    const { data, error } = await client
+      .from(LEDGER_MEMBERS_TABLE)
+      .select("ledger_id, role, ledgers!inner(type)")
+      .eq("user_id", userId)
+      .eq("ledgers.type", "family")
+      .is("deleted_at", null)
+      .is("ledgers.deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to query family membership: ${error.message}`);
+    }
+    if (data === null) return null;
+
+    const row = familyMembershipRowSchema.parse(data);
+    return { ledgerId: row.ledger_id, role: row.role };
   },
 });

@@ -12,6 +12,10 @@ import type { Invitation, InvitationDirection, InvitationStatus } from "../types
 const INVITATIONS_TABLE = "ledger_invitations";
 const INVITATION_COLUMNS =
   "id, ledger_id, inviter_user_id, invitee_user_id, status, responded_at, created_at, updated_at";
+const ACCEPT_INVITATION_RPC = "accept_family_invitation";
+
+/** 承諾不能（pending でない等）を表す RPC のカスタム例外コード。 */
+const INVITATION_NOT_ACCEPTABLE_CODE = "P0001";
 
 /** 一意制約違反（pending 招待の重複）。 */
 const UNIQUE_VIOLATION_CODE = "23505";
@@ -68,6 +72,16 @@ export type InvitationRepository = {
   markResponded(invitationId: string, status: "accepted" | "declined"): Promise<Invitation>;
   /** pending の招待を取消（canceled）にする。既に pending でない場合は ConflictError。 */
   cancel(invitationId: string): Promise<Invitation>;
+  /**
+   * 招待を承諾し、家族家計簿へ参加する（RPC・原子的）。
+   * ownFamilyLedgerId が非 null の場合は自分の家族家計簿を削除してから参加する。
+   * pending でない場合や既にメンバーの場合は ConflictError。
+   */
+  acceptFamilyInvitation(
+    invitationId: string,
+    inviteeUserId: string,
+    ownFamilyLedgerId: string | null,
+  ): Promise<void>;
 };
 
 const NOT_PENDING_MESSAGE = "この招待は既に処理されています";
@@ -168,5 +182,23 @@ export const createInvitationRepository = (client: SupabaseClient): InvitationRe
     }
 
     return toInvitation(invitationRowSchema.parse(data));
+  },
+
+  async acceptFamilyInvitation(invitationId, inviteeUserId, ownFamilyLedgerId) {
+    const { error } = await client.rpc(ACCEPT_INVITATION_RPC, {
+      p_invitation_id: invitationId,
+      p_invitee_user_id: inviteeUserId,
+      p_own_family_ledger_id: ownFamilyLedgerId,
+    });
+
+    if (error) {
+      if (hasCode(error, UNIQUE_VIOLATION_CODE)) {
+        throw new ConflictError("既にこの家計簿のメンバーです");
+      }
+      if (hasCode(error, INVITATION_NOT_ACCEPTABLE_CODE)) {
+        throw new ConflictError(NOT_PENDING_MESSAGE);
+      }
+      throw new Error(`Failed to accept invitation: ${error.message}`);
+    }
   },
 });

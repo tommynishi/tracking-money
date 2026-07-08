@@ -415,6 +415,15 @@ RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categ
 いずれも `is_system` 保護・付け替え先/全件一致の検証・認可は Service 層で事前に行い、RPC は
 データ操作に専念する。WHERE の `ledger_id` 一致で他帳簿への波及を防ぐ。
 
+家族招待の承諾（FR-INVITE-02/03・マイグレーション `20260706000500`）も原子性が必要なため
+RPC で行う。
+
+* `accept_family_invitation(p_invitation_id, p_invitee_user_id, p_own_family_ledger_id)`：
+  （任意）承諾者が所有する家族家計簿を `delete_ledger_cascade` で論理削除 →
+  招待先へ `ledger_members`(member) を追加 → 招待を accepted 更新、を単一トランザクションで実行。
+  承諾可否（本人・pending・所属制約 FR-LEDGER-05）は Service が事前検証し、削除対象の自帳簿 id
+  を渡す（削除しない場合は NULL）。
+
 ---
 
 # 6. マイグレーション運用
@@ -435,3 +444,4 @@ RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categ
 | 2026-07-06 | 家計簿作成を原子的に行う RPC 関数 `create_ledger_with_defaults` を追加（§5・マイグレーション 20260706000200） |
 | 2026-07-06 | 家計簿を子データごと論理削除する RPC 関数 `delete_ledger_cascade` を追加（§5・マイグレーション 20260706000300・FR-LEDGER-08） |
 | 2026-07-06 | カテゴリ管理 RPC `delete_category_with_reassign` / `reorder_categories` を追加（§5・マイグレーション 20260706000400・FR-CATEGORY-01/03） |
+| 2026-07-06 | 家族招待の承諾 RPC `accept_family_invitation` を追加（§5・マイグレーション 20260706000500・FR-INVITE-02/03） |

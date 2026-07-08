@@ -37,6 +37,7 @@ const createRepositoryStub = (
     name,
   })),
   deleteLedgerCascade: vi.fn(async () => undefined),
+  getUserFamilyMembership: vi.fn(async () => null),
 });
 
 describe("createLedger", () => {

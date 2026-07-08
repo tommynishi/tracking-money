@@ -1,7 +1,7 @@
 /**
  * 家族招待の業務ロジック（Service 層・FR-INVITE-01/05/06・api.md 4）。
  * 認可（ledger_members 検証）は本 Service 内で明示的に行う（招待は帳簿横断のため）。
- * 承諾（accept）は原子性のため RPC を用いる別スライスで実装する。
+ * 承諾（accept）は自帳簿削除→参加→招待更新を原子的に行う RPC を呼ぶ。
  */
 import {
   ConflictError,
@@ -91,6 +91,74 @@ const getInviteeInvitationOrThrow = async (
     throw new ForbiddenError("この招待を操作する権限がありません");
   }
   return invitation;
+};
+
+export type AcceptInvitationDeps = {
+  readonly invitationRepository: Pick<InvitationRepository, "getById" | "acceptFamilyInvitation">;
+  readonly ledgerRepository: Pick<LedgerRepository, "getUserFamilyMembership">;
+};
+
+export type AcceptInvitationInput = {
+  readonly invitationId: string;
+  readonly userId: string;
+  /** 自分の家族家計簿を削除して参加するか（FR-INVITE-03）。 */
+  readonly deleteOwnFamilyLedger: boolean;
+};
+
+/**
+ * 招待を承諾し家族家計簿へ参加する（招待先本人のみ・api.md 4.3・FR-INVITE-02/03）。
+ * 既存の家族家計簿の所属制約（FR-LEDGER-05）を検証してから RPC で原子的に参加する。
+ */
+export const acceptInvitation = async (
+  deps: AcceptInvitationDeps,
+  input: AcceptInvitationInput,
+): Promise<Invitation> => {
+  const invitation = await deps.invitationRepository.getById(input.invitationId);
+  if (invitation === null) {
+    throw new NotFoundError("招待が見つかりません");
+  }
+  if (invitation.inviteeUserId !== input.userId) {
+    throw new ForbiddenError("この招待を操作する権限がありません");
+  }
+  if (invitation.status !== "pending") {
+    throw new ConflictError("この招待は既に処理されています");
+  }
+
+  const family = await deps.ledgerRepository.getUserFamilyMembership(input.userId);
+  let ownFamilyLedgerId: string | null = null;
+  if (family !== null) {
+    if (family.role === "member") {
+      // 他者の家族家計簿に参加済み：自動退出せず拒否する（先に退出が必要）
+      throw new ConflictError("既に別の家族家計簿に参加しています", [
+        {
+          code: "ALREADY_FAMILY_MEMBER",
+          message: "既に別の家族家計簿に参加しています。先に退出してから承諾してください",
+        },
+      ]);
+    }
+    // 自分が家族家計簿を所有：削除して参加するか、拒否を選ばせる
+    if (!input.deleteOwnFamilyLedger) {
+      throw new ConflictError("自分の家族家計簿が存在します", [
+        {
+          code: "FAMILY_LEDGER_EXISTS",
+          message: "自分の家族家計簿を削除して参加するか、招待を拒否してください",
+        },
+      ]);
+    }
+    ownFamilyLedgerId = family.ledgerId;
+  }
+
+  await deps.invitationRepository.acceptFamilyInvitation(
+    input.invitationId,
+    input.userId,
+    ownFamilyLedgerId,
+  );
+
+  const accepted = await deps.invitationRepository.getById(input.invitationId);
+  if (accepted === null) {
+    throw new Error("Accepted invitation not found after acceptance");
+  }
+  return accepted;
 };
 
 /** 招待を拒否する（招待先本人のみ・api.md 4.4）。 */
