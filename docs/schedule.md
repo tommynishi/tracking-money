@@ -124,3 +124,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-06 | 1-4 共通UI基盤に着手：セマンティックトークン・ダークモード（data-theme戦略）・ThemeProvider/Toggle・format ユーティリティ・Button/Modal/Toast・AppShell を実装（Vitest に jsdom＋Testing Library 導入）。残り（Input/Badge/Skeleton/EmptyState/Table・CardList・帳簿切替）は消費画面と同時に実装。帳簿切替は ledgers API（1-2依存）待ち |
 | 2026-07-06 | 1-7 カテゴリ管理ドメイン層（一覧・追加・更新・削除・並び替え）の Service/Repository/RPC を実装。削除の明細付け替えと並び替えは RPC（20260706000400）。UI（SCR-05）・Route Handler は 1-2/1-4 後に着手 |
 | 2026-07-06 | 1-6 家族招待ドメイン層（作成・一覧・拒否・取消・承諾）とメンバー管理（一覧・除外・退出）を実装。承諾は自帳簿削除→参加を原子的に行う RPC（20260706000500）。UI（SCR-07）・Route Handler は 1-2/1-4 後に着手 |
+| 2026-07-06 | 1-8 明細ドメイン層（手入力の登録・詳細・編集・削除、一覧の絞り込み/ソート/ページング）を実装。摘要正規化（FR-DUP-01）は純粋関数。カテゴリ学習（FR-AICAT-03）・インポート由来（csv/pdf）は Phase 2。UI（SCR-03/04）・Route Handler は 1-2/1-4 後に着手 |
