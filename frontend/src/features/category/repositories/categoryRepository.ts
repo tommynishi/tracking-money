@@ -12,6 +12,8 @@ import type { Category } from "../types";
 const CATEGORIES_TABLE = "categories";
 const CATEGORY_COLUMNS =
   "id, ledger_id, name, is_fixed_cost, is_system, sort_order, created_at, updated_at";
+const DELETE_CATEGORY_RPC = "delete_category_with_reassign";
+const REORDER_CATEGORIES_RPC = "reorder_categories";
 
 /** 一意制約違反（Postgres）。(ledger_id, name) の重複時に返る。 */
 const UNIQUE_VIOLATION_CODE = "23505";
@@ -28,6 +30,7 @@ const categoryRowSchema = z.object({
 });
 
 const sortOrderRowSchema = z.object({ sort_order: z.number() });
+const idRowSchema = z.object({ id: z.string() });
 
 const toCategory = (row: z.infer<typeof categoryRowSchema>): Category => ({
   id: row.id,
@@ -68,6 +71,14 @@ export type CategoryRepository = {
     categoryId: string,
     fields: UpdateCategoryFields,
   ): Promise<Category>;
+  /** システムカテゴリ（その他）の id を返す。削除時の既定付け替え先に使う。 */
+  findSystemCategoryId(ledgerId: string): Promise<string | null>;
+  /** 家計簿の有効カテゴリ id 一覧（並び替えの全件一致検証に使う）。 */
+  listActiveIds(ledgerId: string): Promise<string[]>;
+  /** 使用中明細を付け替えてからカテゴリを論理削除する（RPC・原子的）。 */
+  deleteWithReassign(ledgerId: string, categoryId: string, reassignTo: string): Promise<void>;
+  /** カテゴリの表示順を配列順で再設定する（RPC・原子的）。 */
+  reorder(ledgerId: string, categoryIds: readonly string[]): Promise<void>;
 };
 
 export const createCategoryRepository = (client: SupabaseClient): CategoryRepository => ({
@@ -165,5 +176,62 @@ export const createCategoryRepository = (client: SupabaseClient): CategoryReposi
     }
 
     return toCategory(categoryRowSchema.parse(data));
+  },
+
+  async findSystemCategoryId(ledgerId) {
+    const { data, error } = await client
+      .from(CATEGORIES_TABLE)
+      .select("id")
+      .eq("ledger_id", ledgerId)
+      .eq("is_system", true)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find system category: ${error.message}`);
+    }
+
+    return data === null ? null : idRowSchema.parse(data).id;
+  },
+
+  async listActiveIds(ledgerId) {
+    const { data, error } = await client
+      .from(CATEGORIES_TABLE)
+      .select("id")
+      .eq("ledger_id", ledgerId)
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new Error(`Failed to list category ids: ${error.message}`);
+    }
+
+    return z
+      .array(idRowSchema)
+      .parse(data)
+      .map((row) => row.id);
+  },
+
+  async deleteWithReassign(ledgerId, categoryId, reassignTo) {
+    const { error } = await client.rpc(DELETE_CATEGORY_RPC, {
+      p_ledger_id: ledgerId,
+      p_category_id: categoryId,
+      p_reassign_to: reassignTo,
+    });
+
+    if (error) {
+      throw new Error(`Failed to delete category: ${error.message}`);
+    }
+  },
+
+  async reorder(ledgerId, categoryIds) {
+    const { error } = await client.rpc(REORDER_CATEGORIES_RPC, {
+      p_ledger_id: ledgerId,
+      p_category_ids: categoryIds,
+    });
+
+    if (error) {
+      throw new Error(`Failed to reorder categories: ${error.message}`);
+    }
   },
 });

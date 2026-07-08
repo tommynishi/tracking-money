@@ -406,6 +406,15 @@ RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categ
 §4 の認可クエリでアクセス権が残り続けるため、必ず含める。オーナー認可・存在確認は Service 層で
 事前に行う。Phase 2/3 のテーブル追加時はこの関数へ削除対象を追記する。
 
+カテゴリ管理（FR-CATEGORY・マイグレーション `20260706000400`）も原子性が必要な操作を RPC で行う。
+
+* `delete_category_with_reassign(p_ledger_id, p_category_id, p_reassign_to)`：使用中明細を
+  付け替え先へ移してからカテゴリを論理削除する（明細のカテゴリ欠損防止・FR-CATEGORY-03）。
+* `reorder_categories(p_ledger_id, p_category_ids uuid[])`：配列順に sort_order を 0 始まりで再設定。
+
+いずれも `is_system` 保護・付け替え先/全件一致の検証・認可は Service 層で事前に行い、RPC は
+データ操作に専念する。WHERE の `ledger_id` 一致で他帳簿への波及を防ぐ。
+
 ---
 
 # 6. マイグレーション運用
@@ -425,3 +434,4 @@ RPC 関数 `create_ledger_with_defaults(p_owner_user_id, p_type, p_name, p_categ
 | 2026-07-05 | レビュー指摘反映：ledgers に drive_folder_id 追加（FR-DRIVE-02）。analysis_caches.analysis_type の値を api.md 9.6 と統一 |
 | 2026-07-06 | 家計簿作成を原子的に行う RPC 関数 `create_ledger_with_defaults` を追加（§5・マイグレーション 20260706000200） |
 | 2026-07-06 | 家計簿を子データごと論理削除する RPC 関数 `delete_ledger_cascade` を追加（§5・マイグレーション 20260706000300・FR-LEDGER-08） |
+| 2026-07-06 | カテゴリ管理 RPC `delete_category_with_reassign` / `reorder_categories` を追加（§5・マイグレーション 20260706000400・FR-CATEGORY-01/03） |

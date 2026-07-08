@@ -122,3 +122,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-06 | 0-2（Next.js初期化）完了。1-1（初期マイグレーション7テーブル）SQL作成（ローカル未適用） |
 | 2026-07-06 | 1-3（認可基盤 assertLedgerAccess / assertLedgerOwner・AppError）と 1-5 の家計簿ドメイン層（作成・名称変更・論理削除の Service/Repository/RPC）を実装。Route Handler・設定画面（SCR-06）は 1-2/1-4 後に着手 |
 | 2026-07-06 | 1-4 共通UI基盤に着手：セマンティックトークン・ダークモード（data-theme戦略）・ThemeProvider/Toggle・format ユーティリティ・Button/Modal/Toast・AppShell を実装（Vitest に jsdom＋Testing Library 導入）。残り（Input/Badge/Skeleton/EmptyState/Table・CardList・帳簿切替）は消費画面と同時に実装。帳簿切替は ledgers API（1-2依存）待ち |
+| 2026-07-06 | 1-7 カテゴリ管理ドメイン層（一覧・追加・更新・削除・並び替え）の Service/Repository/RPC を実装。削除の明細付け替えと並び替えは RPC（20260706000400）。UI（SCR-05）・Route Handler は 1-2/1-4 後に着手 |
