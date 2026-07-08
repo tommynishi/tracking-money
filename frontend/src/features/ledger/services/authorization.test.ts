@@ -8,7 +8,9 @@ import { assertLedgerAccess, assertLedgerOwner } from "./authorization";
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 const LEDGER_ID = "22222222-2222-2222-2222-222222222222";
 
-const createRepositoryStub = (hasMembership: boolean): LedgerMemberRepository => ({
+const createRepositoryStub = (
+  hasMembership: boolean,
+): Pick<LedgerMemberRepository, "hasActiveMembership"> => ({
   hasActiveMembership: vi.fn(async () => hasMembership),
 });
 

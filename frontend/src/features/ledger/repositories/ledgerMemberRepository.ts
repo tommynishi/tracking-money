@@ -3,8 +3,29 @@
  * 業務判断・認可判定は行わず、クエリ実行のみを担う（architecture.md 4 レイヤー責務）。
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
+
+import type { LedgerMember, MemberRole } from "../types";
 
 const LEDGER_MEMBERS_TABLE = "ledger_members";
+
+const memberRowSchema = z.object({
+  user_id: z.string(),
+  role: z.enum(["owner", "member"]),
+  created_at: z.string(),
+  users: z.object({
+    display_name: z.string(),
+    avatar_url: z.string().nullable(),
+  }),
+});
+
+const toMember = (row: z.infer<typeof memberRowSchema>): LedgerMember => ({
+  userId: row.user_id,
+  role: row.role,
+  displayName: row.users.display_name,
+  avatarUrl: row.users.avatar_url,
+  joinedAt: row.created_at,
+});
 
 export type LedgerMemberRepository = {
   /**
@@ -12,6 +33,12 @@ export type LedgerMemberRepository = {
    * database.md §4 の認可クエリに相当する。
    */
   hasActiveMembership(userId: string, ledgerId: string): Promise<boolean>;
+  /** 対象ユーザーの帳簿内 role を返す。メンバーでなければ null。 */
+  getMembershipRole(userId: string, ledgerId: string): Promise<MemberRole | null>;
+  /** 帳簿の有効メンバー一覧を参加日時の昇順で取得する（api.md 3.6）。 */
+  listMembers(ledgerId: string): Promise<LedgerMember[]>;
+  /** 対象ユーザーの所属を論理削除する（除外・退出・api.md 3.7）。 */
+  softDeleteMembership(userId: string, ledgerId: string): Promise<void>;
 };
 
 export const createLedgerMemberRepository = (client: SupabaseClient): LedgerMemberRepository => ({
@@ -31,5 +58,50 @@ export const createLedgerMemberRepository = (client: SupabaseClient): LedgerMemb
     }
 
     return data !== null;
+  },
+
+  async getMembershipRole(userId, ledgerId) {
+    const { data, error } = await client
+      .from(LEDGER_MEMBERS_TABLE)
+      .select("role")
+      .eq("ledger_id", ledgerId)
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to query membership role: ${error.message}`);
+    }
+
+    return data === null ? null : z.object({ role: z.enum(["owner", "member"]) }).parse(data).role;
+  },
+
+  async listMembers(ledgerId) {
+    const { data, error } = await client
+      .from(LEDGER_MEMBERS_TABLE)
+      .select("user_id, role, created_at, users!inner(display_name, avatar_url)")
+      .eq("ledger_id", ledgerId)
+      .is("deleted_at", null)
+      .is("users.deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to list members: ${error.message}`);
+    }
+
+    return z.array(memberRowSchema).parse(data).map(toMember);
+  },
+
+  async softDeleteMembership(userId, ledgerId) {
+    const { error } = await client
+      .from(LEDGER_MEMBERS_TABLE)
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("ledger_id", ledgerId)
+      .eq("user_id", userId)
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new Error(`Failed to remove membership: ${error.message}`);
+    }
   },
 });

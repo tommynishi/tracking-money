@@ -3,6 +3,19 @@
 /** 家計簿種別（personal=個人 / family=家族）。 */
 export type LedgerType = "personal" | "family";
 
+/** 帳簿メンバーの役割（owner=作成者 / member=参加者）。 */
+export type MemberRole = "owner" | "member";
+
+/** 帳簿メンバー1件のドメイン表現（表示用のユーザー情報を含む・api.md 3.6）。 */
+export type LedgerMember = {
+  readonly userId: string;
+  readonly role: MemberRole;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  /** 参加日時（ledger_members.created_at）。 */
+  readonly joinedAt: string;
+};
+
 /** 家計簿（ledgers）のドメイン表現。 */
 export type Ledger = {
   readonly id: string;
