@@ -24,6 +24,26 @@ supabase start        # ローカルの Postgres を起動
 supabase db reset     # migrations/ を順に再適用（クリーンな状態から再構築）
 ```
 
+## 適用後の検証（スモークテスト）
+
+`supabase db reset` の後、7テーブル・5 RPC・RLS が揃い、主要 RPC が期待どおり動くことを
+`supabase/tests/smoke.sql` で確認できる（トランザクション内で実行し最後に ROLLBACK するため
+データは残らない）。
+
+```bash
+# psql で実行（URL は supabase start の既定ローカルDB。異なる場合は supabase status で確認）
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -v ON_ERROR_STOP=1 -f supabase/tests/smoke.sql
+```
+
+- 成功時は `STRUCTURE OK` と `RPC SMOKE OK` の NOTICE が出る
+- いずれかの検証が失敗すると exception で停止する（`ON_ERROR_STOP=1` 推奨）
+- Supabase Studio の SQL Editor に貼り付けて実行してもよい（失敗はエラーとして表示される）
+
+検証内容：テーブル/関数/RLS の存在、`create_ledger_with_defaults`（14カテゴリ＋owner）、
+`accept_family_invitation`（招待→承諾でメンバー2名）、`delete_category_with_reassign`
+（明細の付け替え＋論理削除）、`reorder_categories`、`delete_ledger_cascade`。
+
 ## マイグレーション
 
 - 追加は `supabase migration new <name>` で作成し、SQL を記述する
