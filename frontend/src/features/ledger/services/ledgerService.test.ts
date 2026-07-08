@@ -1,18 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ConflictError } from "@/shared/errors/appError";
+import { ConflictError, ForbiddenError, NotFoundError } from "@/shared/errors/appError";
 
 import type {
   CreateLedgerWithDefaultsInput,
   LedgerRepository,
 } from "../repositories/ledgerRepository";
 import type { Ledger } from "../types";
-import { createLedger } from "./ledgerService";
+import { createLedger, renameLedger } from "./ledgerService";
 
 const OWNER_ID = "11111111-1111-1111-1111-111111111111";
+const OTHER_USER_ID = "22222222-2222-2222-2222-222222222222";
+const LEDGER_ID = "99999999-9999-9999-9999-999999999999";
 
 const createdLedger: Ledger = {
-  id: "99999999-9999-9999-9999-999999999999",
+  id: LEDGER_ID,
   ownerUserId: OWNER_ID,
   type: "personal",
   name: "わたしの家計簿",
@@ -29,6 +31,11 @@ const createRepositoryStub = (
     captured.input = input;
     return createdLedger;
   }),
+  getLedgerById: vi.fn(async () => createdLedger),
+  updateLedgerName: vi.fn(async (_ledgerId: string, name: string) => ({
+    ...createdLedger,
+    name,
+  })),
 });
 
 describe("createLedger", () => {
@@ -66,5 +73,55 @@ describe("createLedger", () => {
       createLedger(repository, { ownerUserId: OWNER_ID, type: "personal", name: "重複" }),
     ).rejects.toBeInstanceOf(ConflictError);
     expect(repository.createLedgerWithDefaults).not.toHaveBeenCalled();
+  });
+});
+
+describe("renameLedger", () => {
+  it("オーナーなら名称を更新し、更新後の家計簿を返す", async () => {
+    // Arrange
+    const repository = createRepositoryStub({
+      ownsPersonalLedger: true,
+      belongsToFamilyLedger: false,
+    });
+
+    // Act
+    const result = await renameLedger(repository, {
+      ledgerId: LEDGER_ID,
+      userId: OWNER_ID,
+      name: "新しい家計簿名",
+    });
+
+    // Assert
+    expect(result.name).toBe("新しい家計簿名");
+    expect(repository.updateLedgerName).toHaveBeenCalledWith(LEDGER_ID, "新しい家計簿名");
+  });
+
+  it("存在しなければ NotFoundError を投げ、更新しない", async () => {
+    // Arrange
+    const repository = createRepositoryStub({
+      ownsPersonalLedger: false,
+      belongsToFamilyLedger: false,
+    });
+    repository.getLedgerById = vi.fn(async () => null);
+
+    // Act & Assert
+    await expect(
+      renameLedger(repository, { ledgerId: LEDGER_ID, userId: OWNER_ID, name: "x" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.updateLedgerName).not.toHaveBeenCalled();
+  });
+
+  it("オーナー以外なら ForbiddenError を投げ、更新しない", async () => {
+    // Arrange
+    const repository = createRepositoryStub({
+      ownsPersonalLedger: true,
+      belongsToFamilyLedger: false,
+    });
+
+    // Act & Assert
+    await expect(
+      renameLedger(repository, { ledgerId: LEDGER_ID, userId: OTHER_USER_ID, name: "x" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(repository.updateLedgerName).not.toHaveBeenCalled();
   });
 });

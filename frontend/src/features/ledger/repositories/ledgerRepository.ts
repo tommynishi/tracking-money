@@ -5,7 +5,7 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { ConflictError } from "@/shared/errors/appError";
+import { ConflictError, NotFoundError } from "@/shared/errors/appError";
 
 import type { UserLedgerSummary } from "../services/ledgerCreationPolicy";
 import type { DefaultCategorySeed, Ledger, LedgerType } from "../types";
@@ -44,11 +44,18 @@ export type CreateLedgerWithDefaultsInput = {
   readonly categories: readonly DefaultCategorySeed[];
 };
 
+/** ledgers から1行を取得する際に選択するカラム（DB行→ドメイン変換用）。 */
+const LEDGER_COLUMNS = "id, owner_user_id, type, name, created_at, updated_at";
+
 export type LedgerRepository = {
   /** 作成可否判定に使う、対象ユーザーの帳簿所属サマリー（ledgerCreationPolicy 用）。 */
   getUserLedgerSummary(userId: string): Promise<UserLedgerSummary>;
   /** 家計簿・オーナーmember・デフォルトカテゴリを原子的に作成する。 */
   createLedgerWithDefaults(input: CreateLedgerWithDefaultsInput): Promise<Ledger>;
+  /** 有効な（論理削除されていない）家計簿を1件取得する。存在しなければ null。 */
+  getLedgerById(ledgerId: string): Promise<Ledger | null>;
+  /** 家計簿の名称を更新する。更新対象が存在しなければ NotFoundError。 */
+  updateLedgerName(ledgerId: string, name: string): Promise<Ledger>;
 };
 
 export const createLedgerRepository = (client: SupabaseClient): LedgerRepository => ({
@@ -102,6 +109,41 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
         throw new ConflictError("この種別の家計簿は既に作成されています");
       }
       throw new Error(`Failed to create ledger: ${error.message}`);
+    }
+
+    return toLedger(ledgerRowSchema.parse(data));
+  },
+
+  async getLedgerById(ledgerId) {
+    const { data, error } = await client
+      .from(LEDGERS_TABLE)
+      .select(LEDGER_COLUMNS)
+      .eq("id", ledgerId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to get ledger: ${error.message}`);
+    }
+
+    return data === null ? null : toLedger(ledgerRowSchema.parse(data));
+  },
+
+  async updateLedgerName(ledgerId, name) {
+    const { data, error } = await client
+      .from(LEDGERS_TABLE)
+      .update({ name })
+      .eq("id", ledgerId)
+      .is("deleted_at", null)
+      .select(LEDGER_COLUMNS)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to update ledger name: ${error.message}`);
+    }
+    // 取得〜更新の間に削除された場合は対象なし
+    if (data === null) {
+      throw new NotFoundError("家計簿が見つかりません");
     }
 
     return toLedger(ledgerRowSchema.parse(data));

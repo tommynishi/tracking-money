@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ForbiddenError, isAppError } from "@/shared/errors/appError";
 
 import type { LedgerMemberRepository } from "../repositories/ledgerMemberRepository";
-import { assertLedgerAccess } from "./authorization";
+import { assertLedgerAccess, assertLedgerOwner } from "./authorization";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 const LEDGER_ID = "22222222-2222-2222-2222-222222222222";
@@ -47,5 +47,17 @@ describe("assertLedgerAccess", () => {
       expect(error.code).toBe("FORBIDDEN");
       expect(error.status).toBe(403);
     }
+  });
+});
+
+describe("assertLedgerOwner", () => {
+  it("オーナー本人の場合は例外を投げない", () => {
+    // Act & Assert
+    expect(() => assertLedgerOwner({ ownerUserId: USER_ID }, USER_ID)).not.toThrow();
+  });
+
+  it("オーナーでない場合は ForbiddenError(403) を投げる", () => {
+    // Act & Assert
+    expect(() => assertLedgerOwner({ ownerUserId: USER_ID }, LEDGER_ID)).toThrow(ForbiddenError);
   });
 });
