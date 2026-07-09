@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { ValidationError } from "@/shared/errors/appError";
+
 import { resolveDateRange, toRange, toTotalPages } from "./entryQuery";
 
 describe("resolveDateRange", () => {
@@ -26,6 +28,16 @@ describe("resolveDateRange", () => {
       from: "2026-07-01",
       to: "2026-07-15",
     });
+  });
+
+  it("month の値域が不正なら ValidationError（00月・13月）", () => {
+    expect(() => resolveDateRange({ month: "2026-00" })).toThrow(ValidationError);
+    expect(() => resolveDateRange({ month: "2026-13" })).toThrow(ValidationError);
+  });
+
+  it("month の書式が不正なら ValidationError", () => {
+    expect(() => resolveDateRange({ month: "2026-7" })).toThrow(ValidationError);
+    expect(() => resolveDateRange({ month: "202607" })).toThrow(ValidationError);
   });
 });
 
