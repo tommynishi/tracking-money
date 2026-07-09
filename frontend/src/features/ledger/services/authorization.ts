@@ -1,6 +1,8 @@
 /**
- * 帳簿アクセスの認可（Service 層の共通関数）。
- * 全 Service は帳簿配下リソースの操作前に本関数を経由する（architecture.md 6.2 / api.md 1.1）。
+ * 帳簿アクセスの認可（共通関数・architecture.md 6.2 / api.md 1.1）。
+ * 呼び出し責務は Route Handler 層：帳簿配下リソース（カテゴリ・明細等）の API は
+ * Service 呼び出し前に assertLedgerAccess を必ず通す（Service 側では認可しない）。
+ * 例外は招待 Service（帳簿横断のため Service 内で明示的に認可する）。
  * 個人家計簿は本人のみ、家族家計簿はメンバーのみ許可（FR-LEDGER-03 / 04）。
  */
 import { ForbiddenError } from "@/shared/errors/appError";
