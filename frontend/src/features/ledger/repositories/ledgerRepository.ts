@@ -17,6 +17,8 @@ const DELETE_LEDGER_RPC = "delete_ledger_cascade";
 
 /** 一意制約違反（Postgres）。同時実行で個人/家族の重複作成が起きた場合に返る。 */
 const UNIQUE_VIOLATION_CODE = "23505";
+/** 既に家族家計簿へ所属している（FR-LEDGER-05 のDBバックストップ・マイグレーション 20260710000100）。 */
+const FAMILY_MEMBERSHIP_CONFLICT_CODE = "FML01";
 
 const ledgerRowSchema = z.object({
   id: z.string(),
@@ -123,6 +125,9 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
       // 事前チェックをすり抜けた同時実行の重複は 409 として扱う
       if (isUniqueViolation(error)) {
         throw new ConflictError("この種別の家計簿は既に作成されています");
+      }
+      if (error.code === FAMILY_MEMBERSHIP_CONFLICT_CODE) {
+        throw new ConflictError("既に家族家計簿に所属しています");
       }
       throw new Error(`Failed to create ledger: ${error.message}`);
     }

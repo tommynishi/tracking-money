@@ -424,6 +424,14 @@ RPC で行う。
   承諾可否（本人・pending・所属制約 FR-LEDGER-05）は Service が事前検証し、削除対象の自帳簿 id
   を渡す（削除しない場合は NULL）。
 
+家族家計簿の二重所属（FR-LEDGER-05）は Service の事前検証だけでは同時実行で防げないため、
+DB側のバックストップとしてガード関数 `assert_no_family_membership(p_user_id)`
+（マイグレーション `20260710000100`）を置く。ユーザー単位の `pg_advisory_xact_lock` で
+家族所属の書き込みを直列化し、有効な家族所属が既に存在すれば SQLSTATE `FML01` で失敗させる。
+呼び出し箇所は `accept_family_invitation`（自帳簿削除後・メンバー挿入前）と
+`create_ledger_with_defaults`（`p_type = 'family'` 時のみ）。アプリは `FML01` を
+409 Conflict へ変換する。
+
 ---
 
 # 6. マイグレーション運用
@@ -445,3 +453,4 @@ RPC で行う。
 | 2026-07-06 | 家計簿を子データごと論理削除する RPC 関数 `delete_ledger_cascade` を追加（§5・マイグレーション 20260706000300・FR-LEDGER-08） |
 | 2026-07-06 | カテゴリ管理 RPC `delete_category_with_reassign` / `reorder_categories` を追加（§5・マイグレーション 20260706000400・FR-CATEGORY-01/03） |
 | 2026-07-06 | 家族招待の承諾 RPC `accept_family_invitation` を追加（§5・マイグレーション 20260706000500・FR-INVITE-02/03） |
+| 2026-07-10 | 家族二重所属のDBバックストップ `assert_no_family_membership`（advisory lock・FML01）を追加し、`accept_family_invitation` / `create_ledger_with_defaults` へ組み込み（§5・マイグレーション 20260710000100・FR-LEDGER-05） |

@@ -1,6 +1,6 @@
 -- スキーマ／RPC スモークテスト（schedule 1-1〜1-8 の DB 面の検証）。
 --
--- 目的: `supabase db reset` 後に、7テーブル・5 RPC・RLS が揃い、主要 RPC が期待どおり
+-- 目的: `supabase db reset` 後に、7テーブル・RPC関数一式・RLS が揃い、主要 RPC が期待どおり
 --       動くことを1回で確認する。何も残さないよう最後に ROLLBACK する。
 --
 -- 実行方法（いずれか）:
@@ -34,7 +34,8 @@ begin
   select string_agg(f, ', ') into v_missing
   from unnest(array[
     'set_updated_at', 'create_ledger_with_defaults', 'delete_ledger_cascade',
-    'delete_category_with_reassign', 'reorder_categories', 'accept_family_invitation'
+    'delete_category_with_reassign', 'reorder_categories', 'accept_family_invitation',
+    'assert_no_family_membership'
   ]) as f
   where not exists (
     select 1 from pg_proc p
@@ -68,12 +69,15 @@ end $$;
 do $$
 declare
   v_owner uuid;
+  v_owner2 uuid;
   v_invitee uuid;
   v_categories jsonb;
   v_personal public.ledgers;
   v_family public.ledgers;
+  v_family2 public.ledgers;
   v_count int;
   v_invitation_id uuid;
+  v_invitation2_id uuid;
   v_system_cat uuid;
   v_target_cat uuid;
 begin
@@ -119,6 +123,27 @@ begin
   assert v_count = 2, format('expected 2 members after accept, got %s', v_count);
   assert (select status from public.ledger_invitations where id = v_invitation_id) = 'accepted',
     'invitation should be accepted';
+
+  -- FR-LEDGER-05 バックストップ: 既に家族家計簿へ所属していると FML01 で失敗する
+  insert into public.users (line_user_id, display_name)
+    values ('U_smoke_owner2', 'オーナー2') returning id into v_owner2;
+  v_family2 := public.create_ledger_with_defaults(v_owner2, 'family', '家族2', v_categories);
+  insert into public.ledger_invitations (ledger_id, inviter_user_id, invitee_user_id, status)
+    values (v_family2.id, v_owner2, v_invitee, 'pending') returning id into v_invitation2_id;
+
+  begin
+    perform public.accept_family_invitation(v_invitation2_id, v_invitee, null);
+    raise exception 'accept guard should reject a second family membership';
+  exception
+    when sqlstate 'FML01' then null; -- 期待どおり
+  end;
+
+  begin
+    perform public.create_ledger_with_defaults(v_invitee, 'family', '家族3', v_categories);
+    raise exception 'create guard should reject a family ledger while belonging to one';
+  exception
+    when sqlstate 'FML01' then null; -- 期待どおり
+  end;
 
   -- delete_category_with_reassign: 使用中明細を「その他」へ付け替えてから論理削除
   select id into v_system_cat

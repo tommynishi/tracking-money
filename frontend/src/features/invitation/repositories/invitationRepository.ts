@@ -16,6 +16,8 @@ const ACCEPT_INVITATION_RPC = "accept_family_invitation";
 
 /** 承諾不能（pending でない等）を表す RPC のカスタム例外コード。 */
 const INVITATION_NOT_ACCEPTABLE_CODE = "P0001";
+/** 既に家族家計簿へ所属している（FR-LEDGER-05 のDBバックストップ・マイグレーション 20260710000100）。 */
+const FAMILY_MEMBERSHIP_CONFLICT_CODE = "FML01";
 
 /** 一意制約違反（pending 招待の重複）。 */
 const UNIQUE_VIOLATION_CODE = "23505";
@@ -197,6 +199,9 @@ export const createInvitationRepository = (client: SupabaseClient): InvitationRe
       }
       if (hasCode(error, INVITATION_NOT_ACCEPTABLE_CODE)) {
         throw new ConflictError(NOT_PENDING_MESSAGE);
+      }
+      if (hasCode(error, FAMILY_MEMBERSHIP_CONFLICT_CODE)) {
+        throw new ConflictError("既に別の家族家計簿に参加しています");
       }
       throw new Error(`Failed to accept invitation: ${error.message}`);
     }
