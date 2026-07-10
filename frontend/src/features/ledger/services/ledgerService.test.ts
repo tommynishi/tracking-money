@@ -7,7 +7,7 @@ import type {
   LedgerRepository,
 } from "../repositories/ledgerRepository";
 import type { Ledger } from "../types";
-import { createLedger, deleteLedger, renameLedger } from "./ledgerService";
+import { createLedger, deleteLedger, getLedgerDetail, renameLedger } from "./ledgerService";
 
 const OWNER_ID = "11111111-1111-1111-1111-111111111111";
 const OTHER_USER_ID = "22222222-2222-2222-2222-222222222222";
@@ -28,6 +28,7 @@ const createRepositoryStub = (
 ): LedgerRepository => ({
   getUserLedgerSummary: vi.fn(async () => summary),
   getOwnedPersonalLedgerId: vi.fn(async () => null),
+  listUserLedgers: vi.fn(async () => []),
   createLedgerWithDefaults: vi.fn(async (input: CreateLedgerWithDefaultsInput) => {
     captured.input = input;
     return createdLedger;
@@ -171,5 +172,45 @@ describe("deleteLedger", () => {
       deleteLedger(repository, { ledgerId: LEDGER_ID, userId: OTHER_USER_ID }),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.deleteLedgerCascade).not.toHaveBeenCalled();
+  });
+});
+
+describe("getLedgerDetail", () => {
+  const createDeps = (overrides: { ledger?: Ledger | null; role?: "owner" | "member" | null } = {}) => ({
+    ledgerRepository: {
+      getLedgerById: vi.fn(async () =>
+        overrides.ledger === undefined ? createdLedger : overrides.ledger,
+      ),
+    },
+    memberRepository: {
+      getMembershipRole: vi.fn(async () => (overrides.role === undefined ? "owner" : overrides.role)),
+      listMembers: vi.fn(async () => [
+        {
+          userId: OWNER_ID,
+          role: "owner" as const,
+          displayName: "たろう",
+          avatarUrl: null,
+          joinedAt: "2026-07-06T00:00:00.000Z",
+        },
+      ]),
+    },
+  });
+
+  it("名称・type・自分の role・メンバー数を返す（api.md 3.3）", async () => {
+    const result = await getLedgerDetail(createDeps(), { ledgerId: LEDGER_ID, userId: OWNER_ID });
+
+    expect(result).toEqual({
+      id: createdLedger.id,
+      type: "personal",
+      name: "わたしの家計簿",
+      role: "owner",
+      memberCount: 1,
+    });
+  });
+
+  it("家計簿が無ければ NotFoundError", async () => {
+    await expect(
+      getLedgerDetail(createDeps({ ledger: null }), { ledgerId: LEDGER_ID, userId: OWNER_ID }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

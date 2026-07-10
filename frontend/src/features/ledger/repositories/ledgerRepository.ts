@@ -44,6 +44,12 @@ export type FamilyMembership = {
   readonly role: MemberRole;
 };
 
+/** ユーザーがアクセスできる家計簿と、その帳簿内での role（api.md 3.1）。 */
+export type UserLedger = {
+  readonly ledger: Ledger;
+  readonly role: MemberRole;
+};
+
 export type CreateLedgerWithDefaultsInput = {
   readonly ownerUserId: string;
   readonly type: LedgerType;
@@ -69,6 +75,8 @@ export type LedgerRepository = {
   getUserFamilyMembership(userId: string): Promise<FamilyMembership | null>;
   /** ユーザーが所有する有効な個人家計簿の id を返す。未作成なら null（api.md 2.1）。 */
   getOwnedPersonalLedgerId(userId: string): Promise<string | null>;
+  /** ユーザーがアクセスできる家計簿（個人＋家族）と role を参加日時の昇順で返す（api.md 3.1）。 */
+  listUserLedgers(userId: string): Promise<UserLedger[]>;
 };
 
 const familyMembershipRowSchema = z.object({
@@ -176,6 +184,31 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
     if (error) {
       throw new Error(`Failed to delete ledger: ${error.message}`);
     }
+  },
+
+  async listUserLedgers(userId) {
+    const { data, error } = await client
+      .from(LEDGER_MEMBERS_TABLE)
+      .select(
+        "role, created_at, ledgers!inner(id, owner_user_id, type, name, created_at, updated_at)",
+      )
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .is("ledgers.deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to list user ledgers: ${error.message}`);
+    }
+
+    const rowSchema = z.object({
+      role: z.enum(["owner", "member"]),
+      ledgers: ledgerRowSchema,
+    });
+    return z
+      .array(rowSchema)
+      .parse(data)
+      .map((row) => ({ ledger: toLedger(row.ledgers), role: row.role }));
   },
 
   async getOwnedPersonalLedgerId(userId) {

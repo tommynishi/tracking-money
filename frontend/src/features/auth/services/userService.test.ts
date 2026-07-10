@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConflictError, NotFoundError, ValidationError } from "@/shared/errors/appError";
 
 import type { User } from "../types";
-import { ensureUser, getMe, updateDisplayName } from "./userService";
+import { ensureUser, getMe, searchUsers, updateDisplayName } from "./userService";
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 const LINE_USER_ID = "U1234567890abcdef";
@@ -95,6 +95,26 @@ describe("getMe", () => {
 
   it("ユーザーが存在しなければ NotFoundError", async () => {
     await expect(getMe(createDeps({ user: null }), USER_ID)).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("searchUsers", () => {
+  const searchResult = { id: USER_ID, displayName: "たろう", avatarUrl: null };
+
+  it("trim したキーワードで検索する（上限付き）", async () => {
+    const repository = { searchByDisplayName: vi.fn(async () => [searchResult]) };
+
+    const result = await searchUsers(repository, "  たろ  ");
+
+    expect(result).toEqual([searchResult]);
+    expect(repository.searchByDisplayName).toHaveBeenCalledWith("たろ", 20);
+  });
+
+  it("2文字未満なら ValidationError（api.md 2.3）", async () => {
+    const repository = { searchByDisplayName: vi.fn(async () => []) };
+
+    await expect(searchUsers(repository, " た ")).rejects.toBeInstanceOf(ValidationError);
+    expect(repository.searchByDisplayName).not.toHaveBeenCalled();
   });
 });
 

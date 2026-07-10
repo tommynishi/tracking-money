@@ -5,11 +5,57 @@
  */
 import { NotFoundError } from "@/shared/errors/appError";
 
-import type { LedgerRepository } from "../repositories/ledgerRepository";
-import type { Ledger, LedgerType } from "../types";
+import type { LedgerMemberRepository } from "../repositories/ledgerMemberRepository";
+import type { LedgerRepository, UserLedger } from "../repositories/ledgerRepository";
+import type { Ledger, LedgerType, MemberRole } from "../types";
 import { assertLedgerOwner } from "./authorization";
 import { buildDefaultCategories } from "./defaultCategories";
 import { assertCanCreateLedger } from "./ledgerCreationPolicy";
+
+/** 自分がアクセスできる家計簿の一覧（api.md 3.1）。 */
+export const listLedgers = (
+  repository: Pick<LedgerRepository, "listUserLedgers">,
+  userId: string,
+): Promise<UserLedger[]> => repository.listUserLedgers(userId);
+
+export type LedgerDetail = {
+  readonly id: string;
+  readonly type: LedgerType;
+  readonly name: string;
+  readonly role: MemberRole;
+  readonly memberCount: number;
+};
+
+export type GetLedgerDetailDeps = {
+  readonly ledgerRepository: Pick<LedgerRepository, "getLedgerById">;
+  readonly memberRepository: Pick<LedgerMemberRepository, "getMembershipRole" | "listMembers">;
+};
+
+/**
+ * 家計簿の詳細（名称・type・自分の role・メンバー数・api.md 3.3）。
+ * アクセス認可（メンバーであること）は Route Handler で事前に検証済みの前提。
+ */
+export const getLedgerDetail = async (
+  deps: GetLedgerDetailDeps,
+  input: { ledgerId: string; userId: string },
+): Promise<LedgerDetail> => {
+  const [ledger, role, members] = await Promise.all([
+    deps.ledgerRepository.getLedgerById(input.ledgerId),
+    deps.memberRepository.getMembershipRole(input.userId, input.ledgerId),
+    deps.memberRepository.listMembers(input.ledgerId),
+  ]);
+  if (ledger === null || role === null) {
+    throw new NotFoundError("家計簿が見つかりません");
+  }
+
+  return {
+    id: ledger.id,
+    type: ledger.type,
+    name: ledger.name,
+    role,
+    memberCount: members.length,
+  };
+};
 
 export type CreateLedgerInput = {
   readonly ownerUserId: string;

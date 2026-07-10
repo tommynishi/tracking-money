@@ -37,6 +37,19 @@ export type CreateUserInput = {
   readonly avatarUrl: string | null;
 };
 
+/** 検索結果に返してよいユーザー情報（LINE ID は含めない・api.md 2.3）。 */
+export type UserSearchResult = {
+  readonly id: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+};
+
+/** ILIKE パターンとして解釈される文字をエスケープする（キーワードはリテラル扱い）。 */
+const escapeLikePattern = (keyword: string): string => keyword.replace(/[\\%_]/g, "\\$&");
+
+/** PostgREST の filter 区切り文字を除去する（クエリ構造の破壊防止）。 */
+const sanitizeKeyword = (keyword: string): string => keyword.replace(/[,()*]/g, "");
+
 export type UserRepository = {
   /** LINE ユーザーIDで有効なユーザーを1件取得する。存在しなければ null。 */
   findByLineUserId(lineUserId: string): Promise<User | null>;
@@ -46,6 +59,8 @@ export type UserRepository = {
   create(input: CreateUserInput): Promise<User>;
   /** 表示名を更新する。対象が存在しなければ NotFoundError。 */
   updateDisplayName(userId: string, displayName: string): Promise<User>;
+  /** 表示名の部分一致でユーザーを検索する（表示名昇順・最大 limit 件・api.md 2.3）。 */
+  searchByDisplayName(keyword: string, limit: number): Promise<UserSearchResult[]>;
 };
 
 export const createUserRepository = (client: SupabaseClient): UserRepository => ({
@@ -94,6 +109,39 @@ export const createUserRepository = (client: SupabaseClient): UserRepository => 
     }
 
     return toUser(userRowSchema.parse(data));
+  },
+
+  async searchByDisplayName(keyword, limit) {
+    const sanitized = sanitizeKeyword(keyword);
+    if (sanitized === "") {
+      return [];
+    }
+
+    const { data, error } = await client
+      .from(USERS_TABLE)
+      .select("id, display_name, avatar_url")
+      .ilike("display_name", `%${escapeLikePattern(sanitized)}%`)
+      .is("deleted_at", null)
+      .order("display_name", { ascending: true })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to search users: ${error.message}`);
+    }
+
+    const rowSchema = z.object({
+      id: z.string(),
+      display_name: z.string(),
+      avatar_url: z.string().nullable(),
+    });
+    return z
+      .array(rowSchema)
+      .parse(data)
+      .map((row) => ({
+        id: row.id,
+        displayName: row.display_name,
+        avatarUrl: row.avatar_url,
+      }));
   },
 
   async updateDisplayName(userId, displayName) {

@@ -7,7 +7,7 @@ import { NotFoundError, ValidationError, isAppError } from "@/shared/errors/appE
 
 import type { LedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
 
-import type { UserRepository } from "../repositories/userRepository";
+import type { UserRepository, UserSearchResult } from "../repositories/userRepository";
 import type { User } from "../types";
 
 const DISPLAY_NAME_MAX_LENGTH = 50;
@@ -80,6 +80,26 @@ export const getMe = async (deps: GetMeDeps, userId: string): Promise<Me> => {
     personalLedgerId,
     familyLedgerId: familyMembership?.ledgerId ?? null,
   };
+};
+
+const SEARCH_MIN_LENGTH = 2;
+const SEARCH_RESULT_LIMIT = 20;
+
+/**
+ * 家族招待用のユーザー検索（FR-INVITE-01・api.md 2.3）。
+ * キーワードは2文字以上。結果に LINE ID は含めない（同名はアイコンで区別する方針）。
+ */
+export const searchUsers = async (
+  repository: Pick<UserRepository, "searchByDisplayName">,
+  keyword: string,
+): Promise<UserSearchResult[]> => {
+  const trimmed = keyword.trim();
+  if (trimmed.length < SEARCH_MIN_LENGTH) {
+    throw new ValidationError(`検索キーワードは${SEARCH_MIN_LENGTH}文字以上で入力してください`, [
+      { field: "q", message: `${SEARCH_MIN_LENGTH}文字以上で入力してください` },
+    ]);
+  }
+  return repository.searchByDisplayName(trimmed, SEARCH_RESULT_LIMIT);
 };
 
 /** 表示名を変更する（FR-AUTH-04・api.md 2.2）。空・長すぎる名前は ValidationError。 */
