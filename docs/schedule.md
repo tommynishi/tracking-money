@@ -127,3 +127,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-06 | 1-8 明細ドメイン層（手入力の登録・詳細・編集・削除、一覧の絞り込み/ソート/ページング）を実装。摘要正規化（FR-DUP-01）は純粋関数。カテゴリ学習（FR-AICAT-03）・インポート由来（csv/pdf）は Phase 2。UI（SCR-03/04）・Route Handler は 1-2/1-4 後に着手 |
 | 2026-07-10 | ドメイン層総点検（コードレビュー）の指摘対応：家族二重所属（FR-LEDGER-05）のDBバックストップを追加（マイグレーション 20260710000100・FML01→409変換・smoke.sql へ否定テスト追加） |
 | 2026-07-10 | 総点検の残指摘対応：month 値域検証（不正は400）、認可コメント修正、reorder_categories の集合更新化（20260710000200）、accept RPC の行返却化（20260710000300）、DBエラーコード判定の共通化（shared/lib/dbErrorCodes）、埋め込み参照の deleted_at 方針統一 |
+| 2026-07-10 | 1-2 認証基盤を実装：Auth.js v5（next-auth@5.0.0-beta.31）＋LINE Provider・JWTセッション、初回ユーザー作成（ensureUser・FR-AUTH-03）、SCR-01 ログイン画面、(main) レイアウトの認証ガード（FR-AUTH-02）・ログアウト（FR-AUTH-05）、共通レスポンスヘルパー（shared/api）と GET/PATCH /api/me（FR-AUTH-04）。動作確認は LINE チャネル（0-6）とローカルDB（0-3）の準備後 |

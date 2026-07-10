@@ -27,6 +27,7 @@ const createRepositoryStub = (
   captured: { input?: CreateLedgerWithDefaultsInput } = {},
 ): LedgerRepository => ({
   getUserLedgerSummary: vi.fn(async () => summary),
+  getOwnedPersonalLedgerId: vi.fn(async () => null),
   createLedgerWithDefaults: vi.fn(async (input: CreateLedgerWithDefaultsInput) => {
     captured.input = input;
     return createdLedger;

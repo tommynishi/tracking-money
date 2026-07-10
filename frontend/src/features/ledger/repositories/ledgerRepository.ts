@@ -67,6 +67,8 @@ export type LedgerRepository = {
   deleteLedgerCascade(ledgerId: string): Promise<void>;
   /** ユーザーが所属する家族家計簿と role を返す。所属が無ければ null（FR-LEDGER-05）。 */
   getUserFamilyMembership(userId: string): Promise<FamilyMembership | null>;
+  /** ユーザーが所有する有効な個人家計簿の id を返す。未作成なら null（api.md 2.1）。 */
+  getOwnedPersonalLedgerId(userId: string): Promise<string | null>;
 };
 
 const familyMembershipRowSchema = z.object({
@@ -174,6 +176,22 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
     if (error) {
       throw new Error(`Failed to delete ledger: ${error.message}`);
     }
+  },
+
+  async getOwnedPersonalLedgerId(userId) {
+    const { data, error } = await client
+      .from(LEDGERS_TABLE)
+      .select("id")
+      .eq("owner_user_id", userId)
+      .eq("type", "personal")
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to query personal ledger: ${error.message}`);
+    }
+
+    return data === null ? null : z.object({ id: z.string() }).parse(data).id;
   },
 
   async getUserFamilyMembership(userId) {
