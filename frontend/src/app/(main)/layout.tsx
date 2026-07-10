@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { AppShell } from "@/shared/components/AppShell";
 import { buttonClassName } from "@/shared/components/buttonStyles";
+import { ToastProvider } from "@/shared/components/toast/ToastProvider";
 
 const LogoutButton = () => (
   <form
@@ -27,5 +28,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     redirect("/login");
   }
 
-  return <AppShell actions={<LogoutButton />}>{children}</AppShell>;
+  return (
+    <ToastProvider>
+      <AppShell actions={<LogoutButton />}>{children}</AppShell>
+    </ToastProvider>
+  );
 }
