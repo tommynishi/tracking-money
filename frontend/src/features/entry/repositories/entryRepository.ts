@@ -14,6 +14,9 @@ const ENTRIES_TABLE = "entries";
 const ENTRY_COLUMNS =
   "id, ledger_id, category_id, used_on, amount, description, normalized_description, " +
   "payment_method, memo, type, source, created_by_user_id, created_at, updated_at";
+// categories / users の埋め込みは表示情報の参照であり、明細の有効性は entries.deleted_at が正。
+// カテゴリの有効参照は削除RPC（delete_category_with_reassign）の付け替えで保証され、
+// 登録者は退会後も履歴として表示するため、埋め込み側の deleted_at では絞らない
 const ENTRY_LIST_COLUMNS =
   "id, used_on, amount, description, payment_method, memo, source, " +
   "categories!inner(id, name), users!inner(id, display_name)";

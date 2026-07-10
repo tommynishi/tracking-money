@@ -2,10 +2,17 @@
  * ledger_invitations への DB アクセス（Repository 層）。DB行⇔ドメイン型の変換を担い、業務判断は持たない。
  * 認可・状態遷移の妥当性検証は Service 層の責務とする。
  */
-import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { ConflictError, ValidationError } from "@/shared/errors/appError";
+import {
+  FAMILY_MEMBERSHIP_CONFLICT_CODE,
+  FOREIGN_KEY_VIOLATION_CODE,
+  RAISE_EXCEPTION_CODE,
+  hasErrorCode,
+  isUniqueViolation,
+} from "@/shared/lib/dbErrorCodes";
 
 import type { Invitation, InvitationDirection, InvitationStatus } from "../types";
 
@@ -13,16 +20,6 @@ const INVITATIONS_TABLE = "ledger_invitations";
 const INVITATION_COLUMNS =
   "id, ledger_id, inviter_user_id, invitee_user_id, status, responded_at, created_at, updated_at";
 const ACCEPT_INVITATION_RPC = "accept_family_invitation";
-
-/** 承諾不能（pending でない等）を表す RPC のカスタム例外コード。 */
-const INVITATION_NOT_ACCEPTABLE_CODE = "P0001";
-/** 既に家族家計簿へ所属している（FR-LEDGER-05 のDBバックストップ・マイグレーション 20260710000100）。 */
-const FAMILY_MEMBERSHIP_CONFLICT_CODE = "FML01";
-
-/** 一意制約違反（pending 招待の重複）。 */
-const UNIQUE_VIOLATION_CODE = "23505";
-/** 外部キー違反（invitee_user_id が存在しない）。 */
-const FK_VIOLATION_CODE = "23503";
 
 const invitationRowSchema = z.object({
   id: z.string(),
@@ -45,8 +42,6 @@ const toInvitation = (row: z.infer<typeof invitationRowSchema>): Invitation => (
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
-
-const hasCode = (error: PostgrestError, code: string): boolean => error.code === code;
 
 export type CreatePendingInvitationInput = {
   readonly ledgerId: string;
@@ -75,15 +70,15 @@ export type InvitationRepository = {
   /** pending の招待を取消（canceled）にする。既に pending でない場合は ConflictError。 */
   cancel(invitationId: string): Promise<Invitation>;
   /**
-   * 招待を承諾し、家族家計簿へ参加する（RPC・原子的）。
+   * 招待を承諾し、家族家計簿へ参加して更新後の招待を返す（RPC・原子的）。
    * ownFamilyLedgerId が非 null の場合は自分の家族家計簿を削除してから参加する。
-   * pending でない場合や既にメンバーの場合は ConflictError。
+   * pending でない場合や既にメンバー・家族所属済みの場合は ConflictError。
    */
   acceptFamilyInvitation(
     invitationId: string,
     inviteeUserId: string,
     ownFamilyLedgerId: string | null,
-  ): Promise<void>;
+  ): Promise<Invitation>;
 };
 
 const NOT_PENDING_MESSAGE = "この招待は既に処理されています";
@@ -102,10 +97,10 @@ export const createInvitationRepository = (client: SupabaseClient): InvitationRe
       .single();
 
     if (error) {
-      if (hasCode(error, UNIQUE_VIOLATION_CODE)) {
+      if (isUniqueViolation(error)) {
         throw new ConflictError("この相手には既に招待中です");
       }
-      if (hasCode(error, FK_VIOLATION_CODE)) {
+      if (hasErrorCode(error, FOREIGN_KEY_VIOLATION_CODE)) {
         throw new ValidationError("指定されたユーザーが存在しません");
       }
       throw new Error(`Failed to create invitation: ${error.message}`);
@@ -187,23 +182,26 @@ export const createInvitationRepository = (client: SupabaseClient): InvitationRe
   },
 
   async acceptFamilyInvitation(invitationId, inviteeUserId, ownFamilyLedgerId) {
-    const { error } = await client.rpc(ACCEPT_INVITATION_RPC, {
+    const { data, error } = await client.rpc(ACCEPT_INVITATION_RPC, {
       p_invitation_id: invitationId,
       p_invitee_user_id: inviteeUserId,
       p_own_family_ledger_id: ownFamilyLedgerId,
     });
 
     if (error) {
-      if (hasCode(error, UNIQUE_VIOLATION_CODE)) {
+      if (isUniqueViolation(error)) {
         throw new ConflictError("既にこの家計簿のメンバーです");
       }
-      if (hasCode(error, INVITATION_NOT_ACCEPTABLE_CODE)) {
+      // 承諾不能（pending でない等）を表す RPC の raise exception
+      if (hasErrorCode(error, RAISE_EXCEPTION_CODE)) {
         throw new ConflictError(NOT_PENDING_MESSAGE);
       }
-      if (hasCode(error, FAMILY_MEMBERSHIP_CONFLICT_CODE)) {
+      if (hasErrorCode(error, FAMILY_MEMBERSHIP_CONFLICT_CODE)) {
         throw new ConflictError("既に別の家族家計簿に参加しています");
       }
       throw new Error(`Failed to accept invitation: ${error.message}`);
     }
+
+    return toInvitation(invitationRowSchema.parse(data));
   },
 });

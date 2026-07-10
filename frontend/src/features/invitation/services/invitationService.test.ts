@@ -46,13 +46,19 @@ const pendingInvitation: Invitation = {
   updatedAt: "2026-07-06T00:00:00.000Z",
 };
 
+const acceptedInvitation: Invitation = {
+  ...pendingInvitation,
+  status: "accepted",
+  respondedAt: "2026-07-06T01:00:00.000Z",
+};
+
 const createInvitationRepoStub = (): InvitationRepository => ({
   createPending: vi.fn(async () => pendingInvitation),
   getById: vi.fn(async () => pendingInvitation),
   listForUser: vi.fn(async () => [pendingInvitation]),
   markResponded: vi.fn(async (_id, status) => ({ ...pendingInvitation, status })),
   cancel: vi.fn(async () => ({ ...pendingInvitation, status: "canceled" as const })),
-  acceptFamilyInvitation: vi.fn(async () => undefined),
+  acceptFamilyInvitation: vi.fn(async () => acceptedInvitation),
 });
 
 const createAcceptDeps = (
@@ -129,11 +135,12 @@ describe("acceptInvitation", () => {
   const ownedFamily: FamilyMembership = { ledgerId: "own-ledger", role: "owner" };
   const joinedFamily: FamilyMembership = { ledgerId: "other-ledger", role: "member" };
 
-  it("家族家計簿に未所属なら参加する（削除対象なし）", async () => {
+  it("家族家計簿に未所属なら参加し、更新後の招待を返す（削除対象なし）", async () => {
     const repository = createInvitationRepoStub();
     const deps = createAcceptDeps(null, repository);
-    await acceptInvitation(deps, input);
+    const result = await acceptInvitation(deps, input);
     expect(repository.acceptFamilyInvitation).toHaveBeenCalledWith(INVITATION_ID, INVITEE_ID, null);
+    expect(result).toEqual(acceptedInvitation);
   });
 
   it("自分の家族家計簿を所有し deleteOwnFamilyLedger=true なら自帳簿を削除して参加する", async () => {

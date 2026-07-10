@@ -79,7 +79,7 @@ export const listInvitations = (
 
 /** 招待先本人であることを検証して招待を返す（未存在=404 / 別人=403）。 */
 const getInviteeInvitationOrThrow = async (
-  repository: InvitationRepository,
+  repository: Pick<InvitationRepository, "getById">,
   invitationId: string,
   userId: string,
 ): Promise<Invitation> => {
@@ -113,13 +113,11 @@ export const acceptInvitation = async (
   deps: AcceptInvitationDeps,
   input: AcceptInvitationInput,
 ): Promise<Invitation> => {
-  const invitation = await deps.invitationRepository.getById(input.invitationId);
-  if (invitation === null) {
-    throw new NotFoundError("招待が見つかりません");
-  }
-  if (invitation.inviteeUserId !== input.userId) {
-    throw new ForbiddenError("この招待を操作する権限がありません");
-  }
+  const invitation = await getInviteeInvitationOrThrow(
+    deps.invitationRepository,
+    input.invitationId,
+    input.userId,
+  );
   if (invitation.status !== "pending") {
     throw new ConflictError("この招待は既に処理されています");
   }
@@ -148,17 +146,11 @@ export const acceptInvitation = async (
     ownFamilyLedgerId = family.ledgerId;
   }
 
-  await deps.invitationRepository.acceptFamilyInvitation(
+  return deps.invitationRepository.acceptFamilyInvitation(
     input.invitationId,
     input.userId,
     ownFamilyLedgerId,
   );
-
-  const accepted = await deps.invitationRepository.getById(input.invitationId);
-  if (accepted === null) {
-    throw new Error("Accepted invitation not found after acceptance");
-  }
-  return accepted;
 };
 
 /** 招待を拒否する（招待先本人のみ・api.md 4.4）。 */

@@ -2,10 +2,15 @@
  * ledgers への DB アクセス（Repository 層）。DB行⇔ドメイン型の変換を担い、業務判断は持たない。
  * 作成は原子性のため RPC `create_ledger_with_defaults` を呼ぶ（database.md §5 / マイグレーション 20260706000200）。
  */
-import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { ConflictError, NotFoundError } from "@/shared/errors/appError";
+import {
+  FAMILY_MEMBERSHIP_CONFLICT_CODE,
+  hasErrorCode,
+  isUniqueViolation,
+} from "@/shared/lib/dbErrorCodes";
 
 import type { UserLedgerSummary } from "../services/ledgerCreationPolicy";
 import type { DefaultCategorySeed, Ledger, LedgerType, MemberRole } from "../types";
@@ -14,11 +19,6 @@ const LEDGERS_TABLE = "ledgers";
 const LEDGER_MEMBERS_TABLE = "ledger_members";
 const CREATE_LEDGER_RPC = "create_ledger_with_defaults";
 const DELETE_LEDGER_RPC = "delete_ledger_cascade";
-
-/** 一意制約違反（Postgres）。同時実行で個人/家族の重複作成が起きた場合に返る。 */
-const UNIQUE_VIOLATION_CODE = "23505";
-/** 既に家族家計簿へ所属している（FR-LEDGER-05 のDBバックストップ・マイグレーション 20260710000100）。 */
-const FAMILY_MEMBERSHIP_CONFLICT_CODE = "FML01";
 
 const ledgerRowSchema = z.object({
   id: z.string(),
@@ -37,8 +37,6 @@ const toLedger = (row: z.infer<typeof ledgerRowSchema>): Ledger => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
-
-const isUniqueViolation = (error: PostgrestError): boolean => error.code === UNIQUE_VIOLATION_CODE;
 
 /** ユーザーが所属する家族家計簿と、その帳簿内での role。 */
 export type FamilyMembership = {
@@ -126,7 +124,7 @@ export const createLedgerRepository = (client: SupabaseClient): LedgerRepository
       if (isUniqueViolation(error)) {
         throw new ConflictError("この種別の家計簿は既に作成されています");
       }
-      if (error.code === FAMILY_MEMBERSHIP_CONFLICT_CODE) {
+      if (hasErrorCode(error, FAMILY_MEMBERSHIP_CONFLICT_CODE)) {
         throw new ConflictError("既に家族家計簿に所属しています");
       }
       throw new Error(`Failed to create ledger: ${error.message}`);

@@ -61,6 +61,8 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 | `20260706000400_category_management.sql` | RPC 関数 `delete_category_with_reassign`（明細付け替え→論理削除）/ `reorder_categories`（表示順再設定）（database.md §5・FR-CATEGORY-01/03） | Phase 1-7 |
 | `20260706000500_accept_family_invitation.sql` | RPC 関数 `accept_family_invitation`。自帳簿削除→メンバー追加→招待更新を原子的に実行（database.md §5・FR-INVITE-02/03） | Phase 1-6 |
 | `20260710000100_family_membership_guard.sql` | 家族二重所属のDBバックストップ（FR-LEDGER-05）。ガード関数 `assert_no_family_membership`（advisory lock＋検証・違反は FML01）を追加し、`accept_family_invitation` / `create_ledger_with_defaults` を置き換え | Phase 1-6 |
+| `20260710000200_reorder_categories_set_based.sql` | `reorder_categories` を unnest による単一 UPDATE へ変更（空配列で失敗しない） | Phase 1-7 |
+| `20260710000300_accept_family_invitation_returns_row.sql` | `accept_family_invitation` の戻り値を更新後の招待行へ変更（承諾後の再取得を不要に） | Phase 1-6 |
 
 ### Phaseごとの予定（schedule.md）
 

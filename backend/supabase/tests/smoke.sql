@@ -78,6 +78,7 @@ declare
   v_count int;
   v_invitation_id uuid;
   v_invitation2_id uuid;
+  v_accepted public.ledger_invitations;
   v_system_cat uuid;
   v_target_cat uuid;
 begin
@@ -116,7 +117,8 @@ begin
   insert into public.ledger_invitations (ledger_id, inviter_user_id, invitee_user_id, status)
     values (v_family.id, v_owner, v_invitee, 'pending') returning id into v_invitation_id;
 
-  perform public.accept_family_invitation(v_invitation_id, v_invitee, null);
+  v_accepted := public.accept_family_invitation(v_invitation_id, v_invitee, null);
+  assert v_accepted.status = 'accepted', 'accept should return the accepted invitation row';
 
   select count(*) into v_count
     from public.ledger_members where ledger_id = v_family.id and deleted_at is null;
@@ -174,6 +176,11 @@ begin
   -- 逆順投入により、元が最後尾だった「その他」が先頭（sort_order = 0）になる
   assert (select sort_order from public.categories where id = v_system_cat) = 0,
     'reorder should move system category to the front';
+
+  -- 空配列は no-op（エラーにならず、既存の sort_order を変えない）
+  perform public.reorder_categories(v_personal.id, array[]::uuid[]);
+  assert (select sort_order from public.categories where id = v_system_cat) = 0,
+    'reorder with empty array should be a no-op';
 
   -- delete_ledger_cascade: 家計簿と子データ（メンバー含む）を論理削除
   perform public.delete_ledger_cascade(v_family.id);

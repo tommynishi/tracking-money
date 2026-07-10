@@ -77,12 +77,13 @@ export const createLedgerMemberRepository = (client: SupabaseClient): LedgerMemb
   },
 
   async listMembers(ledgerId) {
+    // users の埋め込みは表示情報の参照であり、所属の有効性は ledger_members.deleted_at が正。
+    // ユーザー退会時は退会フロー側で所属を論理削除する（埋め込み側の deleted_at では絞らない）
     const { data, error } = await client
       .from(LEDGER_MEMBERS_TABLE)
       .select("user_id, role, created_at, users!inner(display_name, avatar_url)")
       .eq("ledger_id", ledgerId)
       .is("deleted_at", null)
-      .is("users.deleted_at", null)
       .order("created_at", { ascending: true });
 
     if (error) {

@@ -2,10 +2,11 @@
  * categories への DB アクセス（Repository 層）。DB行⇔ドメイン型の変換を担い、業務判断は持たない。
  * 認可（ledger_members 検証）は Route Handler、業務ルール（is_system 保護等）は Service の責務。
  */
-import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { ConflictError, NotFoundError } from "@/shared/errors/appError";
+import { isUniqueViolation } from "@/shared/lib/dbErrorCodes";
 
 import type { Category } from "../types";
 
@@ -14,9 +15,6 @@ const CATEGORY_COLUMNS =
   "id, ledger_id, name, is_fixed_cost, is_system, sort_order, created_at, updated_at";
 const DELETE_CATEGORY_RPC = "delete_category_with_reassign";
 const REORDER_CATEGORIES_RPC = "reorder_categories";
-
-/** 一意制約違反（Postgres）。(ledger_id, name) の重複時に返る。 */
-const UNIQUE_VIOLATION_CODE = "23505";
 
 const categoryRowSchema = z.object({
   id: z.string(),
@@ -42,8 +40,6 @@ const toCategory = (row: z.infer<typeof categoryRowSchema>): Category => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
-
-const isUniqueViolation = (error: PostgrestError): boolean => error.code === UNIQUE_VIOLATION_CODE;
 
 const DUPLICATE_NAME_MESSAGE = "同名のカテゴリが既に存在します";
 
