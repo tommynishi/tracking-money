@@ -10,7 +10,11 @@ import { createLedger, listLedgers } from "@/features/ledger/services/ledgerServ
 
 const createBodySchema = z.object({
   type: z.enum(["personal", "family"]),
-  name: z.string().trim().min(1, "家計簿名を入力してください").max(50, "50文字以内で入力してください"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "家計簿名を入力してください")
+    .max(50, "50文字以内で入力してください"),
 });
 
 export async function GET(): Promise<Response> {

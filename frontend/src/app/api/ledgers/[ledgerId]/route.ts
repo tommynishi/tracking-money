@@ -22,7 +22,11 @@ type RouteContext = { params: Promise<{ ledgerId: string }> };
 const paramsSchema = z.object({ ledgerId: z.uuid() });
 
 const patchBodySchema = z.object({
-  name: z.string().trim().min(1, "家計簿名を入力してください").max(50, "50文字以内で入力してください"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "家計簿名を入力してください")
+    .max(50, "50文字以内で入力してください"),
 });
 
 export async function GET(_request: Request, context: RouteContext): Promise<Response> {

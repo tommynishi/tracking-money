@@ -16,10 +16,9 @@ export type ListMeta = {
 
 /** 成功レスポンス（api.md 1.3）。作成時は status: 201 を指定する。 */
 export const jsonData = (data: unknown, init?: { status?: number; meta?: ListMeta }): Response =>
-  Response.json(
-    init?.meta === undefined ? { data } : { data, meta: init.meta },
-    { status: init?.status ?? 200 },
-  );
+  Response.json(init?.meta === undefined ? { data } : { data, meta: init.meta }, {
+    status: init?.status ?? 200,
+  });
 
 /** 削除成功（204・ボディなし・api.md 1.2）。 */
 export const noContent = (): Response => new Response(null, { status: 204 });

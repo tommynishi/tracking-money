@@ -176,14 +176,18 @@ describe("deleteLedger", () => {
 });
 
 describe("getLedgerDetail", () => {
-  const createDeps = (overrides: { ledger?: Ledger | null; role?: "owner" | "member" | null } = {}) => ({
+  const createDeps = (
+    overrides: { ledger?: Ledger | null; role?: "owner" | "member" | null } = {},
+  ) => ({
     ledgerRepository: {
       getLedgerById: vi.fn(async () =>
         overrides.ledger === undefined ? createdLedger : overrides.ledger,
       ),
     },
     memberRepository: {
-      getMembershipRole: vi.fn(async () => (overrides.role === undefined ? "owner" : overrides.role)),
+      getMembershipRole: vi.fn(async () =>
+        overrides.role === undefined ? "owner" : overrides.role,
+      ),
       listMembers: vi.fn(async () => [
         {
           userId: OWNER_ID,
