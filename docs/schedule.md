@@ -25,7 +25,7 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 0-1 | 設計ドキュメント一式の作成・承認 | 完了（2026-07-05） |
 | 0-2 | Next.js プロジェクト初期化（frontend/。TypeScript strict / Tailwind / ESLint / Prettier） | 完了（2026-07-06） |
 | 0-3 | Supabase プロジェクト初期化（backend/。ローカル環境・CLI） | 未着手 |
-| 0-4 | GitHub Actions CI 構築（lint / typecheck / test / build） | 未着手 |
+| 0-4 | GitHub Actions CI 構築（lint / typecheck / test / build） | 完了（2026-07-11。Integration用Supabase起動は0-3後に追加） |
 | 0-5 | Vercel 接続・デプロイ確認（Hello World） | 未着手 |
 | 0-6 | LINE Login チャネル作成（外部準備・ユーザー作業） | 未着手 |
 
@@ -131,3 +131,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-10 | Phase 1 の Route Handler を全配線（api.md 2〜6）：ledgers（一覧/作成/詳細/名称変更/削除）・members（一覧/除外・退出）・invitations（作成/一覧/承諾/拒否/取消）・categories（一覧/追加/変更/削除/並び替え）・entries（一覧/登録/詳細/編集/削除）・users/search。認可は各 Handler で assertLedgerAccess を経由。listUserLedgers / getLedgerDetail / searchUsers を追加。DB 込みの Integration Test はローカル Supabase 準備（0-3）後に追加 |
 | 2026-07-10 | SCR-03/04（明細一覧・登録編集モーダル）と初期セットアップ（個人家計簿の作成促し）を実装。クライアント fetch ラッパー（shared/api/client・ApiError）、月/カテゴリ絞り込み・ページング・削除確認・Toast 通知。PCは表・スマホはカード（ui-rules）。残り画面は SCR-05/06/07/08 |
 | 2026-07-10 | SCR-05（カテゴリ管理：追加・名称/固定費変更・付け替え削除・↑↓並び替え）、SCR-06（家計簿設定：帳簿選択・名称変更・メンバー管理・ユーザー検索＋招待・帳簿削除）、SCR-07（招待一覧：承諾/拒否/取消・FAMILY_LEDGER_EXISTS の削除確認フロー）、SCR-08（アカウント設定：表示名変更）と共通ナビゲーションを実装。Phase 1 の画面実装完了（動作確認は 0-3/0-6 後） |
+| 2026-07-11 | 0-4 GitHub Actions CI を構築（.github/workflows/ci.yml。PR/main push で lint / typecheck / test / build。ローカルで4コマンドすべて成功を確認。Integration テスト用のローカル Supabase 起動は 0-3 完了後に追加） |
