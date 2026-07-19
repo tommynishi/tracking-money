@@ -35,6 +35,8 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 
 # Phase 1：認証・家計簿の基盤
 
+**完了（2026-07-19）**：全タスク（1-1〜1-9）実装済み。完了条件（LINEログイン〜家族招待〜明細手入力〜明細一覧の本番動作・認可 Integration Test 全リソース通過）を満たし、PR #1 で main へマージ済み。
+
 想定規模：大（本プロジェクトの土台。認可設計を含むため最も慎重に進める）
 
 | # | タスク | 依存 |
@@ -139,3 +141,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-19 | 0-6 完了：LINE Login チャネル作成（ユーザー作業）・コールバックURL（ローカル/本番）登録。LINE 提供の email スコープ既定要求は未申請チャネルで invalid_scope になるため authorization scope を openid profile へ明示。ローカルで LINEログイン→初回ユーザー作成→明細一覧まで動作確認済み。本番の LINE_CHANNEL_ID/SECRET も実値へ差し替え。**Phase 0 完了**。残る本番作業は Supabase 本番プロジェクト作成と本番環境変数（Supabase）差し替え（Phase 1 完了条件の本番動作確認で実施） |
 | 2026-07-19 | Supabase 本番プロジェクト TrackingMoney（xfqddwkykosswtymzwqq・ap-southeast-1）を作成（ユーザー作業）し、CLI で link・全9マイグレーションを db push で適用（migration list で一致確認）。Vercel の Supabase 3変数を本番実値へ差し替え再デプロイ。本番の全環境変数が実値になり、残るは本番での LINE ログイン通し確認（Phase 1 完了条件） |
 | 2026-07-19 | 本番 LINE ログインが 400 になる問題を修正：(1) CLI パイプ登録で環境変数先頭に BOM が混入していたため Vercel REST API で全変数を登録し直し (2) Root Directory 設定後の CLI デプロイはリポジトリルートから実行が必要（frontend/ からの前回デプロイは失敗していた）。あわせて Supabase 本番をユーザー作り直しの新プロジェクト（uxbdatziyghatuvrihnd）へ切替（link・全9マイグレーション適用・Vercel 3変数差し替え）。**本番で LINE ログイン成功を確認**。残りは main への PR 作成・CI 初回実行・マージ（本番は Git 連携により自動デプロイへ移行） |
+| 2026-07-19 | PR #1（feature/project-init → main）をマージ。CI 通過・main の本番自動デプロイ完了を確認。**Phase 0 / Phase 1 完了**。次は Phase 2（インポート）— 着手前に各カード会社の実CSVサンプル入手が必要 |
