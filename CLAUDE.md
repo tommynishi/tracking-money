@@ -36,11 +36,14 @@ Tracking Money は、AIを活用した家計簿・資産管理Webアプリです
 1. docs/requirements.md
 2. docs/architecture.md
 3. docs/database.md
-4. docs/api.md
-5. docs/screen.md
-6. docs/coding-rules.md
-7. docs/ui-rules.md
-8. docs/development-flow.md
+4. docs/er.md（database.md の補助・ER図）
+5. docs/state.md（database.md / api.md の補助・状態遷移図）
+6. docs/api.md
+7. docs/screen.md
+8. docs/coding-rules.md
+9. docs/ui-rules.md
+10. docs/development-flow.md
+11. docs/schedule.md（開発スケジュール）
 
 仕様が競合する場合は requirements.md を最優先としてください。
 

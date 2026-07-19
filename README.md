@@ -94,30 +94,59 @@ cd tracking-money
 
 ## パッケージインストール
 
+Next.js アプリは `frontend/` 配下にあります。
+
 ```bash
+cd frontend
 npm install
 ```
 
+## ローカルDB（Supabase）起動
+
+Supabase プロジェクトは `backend/` 配下にあります。Docker Desktop を起動した上で実行してください。
+
+```bash
+cd backend
+supabase start
+```
+
+スキーマは `backend/supabase/migrations/` のマイグレーションで適用されます（`supabase db reset` で再適用）。
+
 ## 環境変数
 
-`.env.local` を作成し、以下の情報を設定してください。
+`frontend/.env.local` を作成し、以下の情報を設定してください。変数の一覧・用途・公開範囲は docs/architecture.md 9.2 を正とします。
 
 ```env
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
-OPENAI_API_KEY=
-
+# Auth.js（LINE Login）
+AUTH_SECRET=
 LINE_CHANNEL_ID=
 LINE_CHANNEL_SECRET=
 
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+# LINE Messaging API（通知・Loginとは別チャネル）
+LINE_MESSAGING_CHANNEL_ACCESS_TOKEN=
+
+# OpenAI（AI分析 / Vision OCR）
+OPENAI_API_KEY=
+
+# Google Drive（アプリ管理の共通Drive・サービスアカウント）
+GOOGLE_SERVICE_ACCOUNT_KEY=
+
+# Vercel Cron 保護
+CRON_SECRET=
 ```
+
+* `NEXT_PUBLIC_` が付く変数のみクライアントへ公開される。それ以外はサーバー専用のため、絶対に `NEXT_PUBLIC_` を付けない
+* Google Drive はユーザー個人の連携ではなく、**アプリ管理のサービスアカウント**で共通Driveへ接続する（docs/requirements.md CON-05）
 
 ## 開発サーバー起動
 
 ```bash
+cd frontend
 npm run dev
 ```
 
@@ -149,6 +178,7 @@ tracking-money/
 | architecture.md     | システム構成図   |
 | screen.md           | 画面設計・画面遷移 |
 | er.md               | ER図       |
+| state.md            | 状態遷移図     |
 | database.md         | テーブル定義    |
 | api.md              | API仕様書    |
 | coding-rules.md     | コーディング規約  |
@@ -177,17 +207,22 @@ tracking-money/
 
 # Roadmap
 
+スコープの正は docs/requirements.md §4 です。
+
 ## Phase 1
 
 * LINEログイン
-* 家計簿CRUD
+* 家計簿CRUD（個人・家族・招待）
 * カテゴリ管理
+* 明細CRUD（ログイン後トップ＝明細一覧）
 
 ## Phase 2
 
 * CSVインポート
 * PDF OCR
+* 重複チェック
 * Google Drive連携
+* AIカテゴリ自動分類
 
 ## Phase 3
 
