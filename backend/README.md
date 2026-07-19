@@ -45,6 +45,18 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 `delete_category_with_reassign`（明細の付け替え＋論理削除）、`reorder_categories`、
 `delete_ledger_cascade`。
 
+## Integration Test（DB込み）
+
+Route Handler の認可を実DBで検証するテストが `frontend/src/tests/integration/` にある。
+ローカル Supabase を起動した状態で実行する（CI でも同様に起動して実行される）。
+
+```bash
+cd frontend
+npm run test:integration
+```
+
+テストデータは実行ごとに一意な値で作成される。DBを初期状態へ戻すには `supabase db reset` を実行する。
+
 ## マイグレーション
 
 - 追加は `supabase migration new <name>` で作成し、SQL を記述する
@@ -63,6 +75,7 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
 | `20260710000100_family_membership_guard.sql` | 家族二重所属のDBバックストップ（FR-LEDGER-05）。ガード関数 `assert_no_family_membership`（advisory lock＋検証・違反は FML01）を追加し、`accept_family_invitation` / `create_ledger_with_defaults` を置き換え | Phase 1-6 |
 | `20260710000200_reorder_categories_set_based.sql` | `reorder_categories` を unnest による単一 UPDATE へ変更（空配列で失敗しない） | Phase 1-7 |
 | `20260710000300_accept_family_invitation_returns_row.sql` | `accept_family_invitation` の戻り値を更新後の招待行へ変更（承諾後の再取得を不要に） | Phase 1-6 |
+| `20260719000100_service_role_grants.sql` | アクセス権限の明示化：service_role へ全テーブルの DML を付与し、anon / authenticated の直接アクセスを全面拒否（default privileges 含む）。新しい CLI のローカル既定では DML が付与されないため必須 | Phase 0-3 |
 
 ### Phaseごとの予定（schedule.md）
 

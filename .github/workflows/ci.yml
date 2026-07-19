@@ -1,6 +1,6 @@
 # CI（development-flow.md 5.1）
-# PR と main への push で lint / typecheck / test / build を実行する。
-# Integration テスト用のローカル Supabase 起動は 0-3 完了後に追加する。
+# PR と main への push で lint / typecheck / test（Unit・Integration）/ build を実行する。
+# Integration テストは CI 上でローカル Supabase を起動して実DBに対して実行する。
 name: CI
 
 on:
@@ -38,6 +38,17 @@ jobs:
 
       - name: Test
         run: npm run test
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        working-directory: backend
+        run: supabase start
+
+      - name: Integration test
+        run: npm run test:integration
 
       - name: Build
         run: npm run build
