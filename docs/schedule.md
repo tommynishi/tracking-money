@@ -26,7 +26,7 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 0-2 | Next.js プロジェクト初期化（frontend/。TypeScript strict / Tailwind / ESLint / Prettier） | 完了（2026-07-06） |
 | 0-3 | Supabase プロジェクト初期化（backend/。ローカル環境・CLI） | 完了（2026-07-19） |
 | 0-4 | GitHub Actions CI 構築（lint / typecheck / test / build） | 完了（2026-07-11。Integration用Supabase起動は0-3後に追加） |
-| 0-5 | Vercel 接続・デプロイ確認（Hello World） | 未着手 |
+| 0-5 | Vercel 接続・デプロイ確認（Hello World） | 完了（2026-07-19。Git自動デプロイ連携のみ Vercel GitHub App 導入待ち） |
 | 0-6 | LINE Login チャネル作成（外部準備・ユーザー作業） | 未着手 |
 
 **完了条件**：mainへのマージでCIが通り、Vercel上でプレースホルダー画面が表示される。
@@ -134,3 +134,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-11 | 0-4 GitHub Actions CI を構築（.github/workflows/ci.yml。PR/main push で lint / typecheck / test / build。ローカルで4コマンドすべて成功を確認。Integration テスト用のローカル Supabase 起動は 0-3 完了後に追加） |
 | 2026-07-19 | 0-3 完了：Docker Desktop / Supabase CLI 2.109.1 導入（ユーザー作業）後、supabase init・start・db reset で全8マイグレーションを適用し、smoke.sql が STRUCTURE OK / RPC SMOKE OK。frontend/.env.local をローカル値で作成（LINE_* は 0-6 後に記入） |
 | 2026-07-19 | 認可の Integration Test を全リソースで追加（frontend/src/tests/integration/・27件。auth のみモックし Route Handler→Service→実DB を検証）。マイグレーション 20260719000100 でアクセス権限を明示化（新CLI既定で service_role に DML が付与されないため。anon/authenticated は全面拒否）。CI へ Supabase 起動＋test:integration を追加。Phase 1 の残タスクは本番環境での動作確認（0-5/0-6 依存）のみ |
+| 2026-07-19 | 0-5 完了：Vercel プロジェクト tracking-money を作成（Root Directory=frontend）し本番デプロイ。https://tracking-money-theta.vercel.app で SCR-01 表示を確認（/ → /login リダイレクト）。本番環境変数10件を暫定値で設定（Supabase 本番値・LINE_* は本番環境構築/0-6 後に差し替え）。Git 自動デプロイは Vercel GitHub App の導入（ユーザー作業）後に `vercel git connect` で接続 |
