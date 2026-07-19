@@ -27,7 +27,7 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 0-3 | Supabase プロジェクト初期化（backend/。ローカル環境・CLI） | 完了（2026-07-19） |
 | 0-4 | GitHub Actions CI 構築（lint / typecheck / test / build） | 完了（2026-07-11。Integration用Supabase起動は0-3後に追加） |
 | 0-5 | Vercel 接続・デプロイ確認（Hello World） | 完了（2026-07-19） |
-| 0-6 | LINE Login チャネル作成（外部準備・ユーザー作業） | 未着手 |
+| 0-6 | LINE Login チャネル作成（外部準備・ユーザー作業） | 完了（2026-07-19） |
 
 **完了条件**：mainへのマージでCIが通り、Vercel上でプレースホルダー画面が表示される。
 
@@ -136,3 +136,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-19 | 認可の Integration Test を全リソースで追加（frontend/src/tests/integration/・27件。auth のみモックし Route Handler→Service→実DB を検証）。マイグレーション 20260719000100 でアクセス権限を明示化（新CLI既定で service_role に DML が付与されないため。anon/authenticated は全面拒否）。CI へ Supabase 起動＋test:integration を追加。Phase 1 の残タスクは本番環境での動作確認（0-5/0-6 依存）のみ |
 | 2026-07-19 | 0-5 完了：Vercel プロジェクト tracking-money を作成（Root Directory=frontend）し本番デプロイ。https://tracking-money-theta.vercel.app で SCR-01 表示を確認（/ → /login リダイレクト）。本番環境変数10件を暫定値で設定（Supabase 本番値・LINE_* は本番環境構築/0-6 後に差し替え）。Git 自動デプロイは Vercel GitHub App の導入（ユーザー作業）後に `vercel git connect` で接続 |
 | 2026-07-19 | Vercel と GitHub の連携完了（tommynishi/tracking-money・Production Branch=main・Root Directory=frontend）。以後 main への push で本番、その他ブランチへの push でプレビューが自動デプロイされる。Phase 0 の残りは 0-6（LINE Login チャネル作成・ユーザー作業）のみ |
+| 2026-07-19 | 0-6 完了：LINE Login チャネル作成（ユーザー作業）・コールバックURL（ローカル/本番）登録。LINE 提供の email スコープ既定要求は未申請チャネルで invalid_scope になるため authorization scope を openid profile へ明示。ローカルで LINEログイン→初回ユーザー作成→明細一覧まで動作確認済み。本番の LINE_CHANNEL_ID/SECRET も実値へ差し替え。**Phase 0 完了**。残る本番作業は Supabase 本番プロジェクト作成と本番環境変数（Supabase）差し替え（Phase 1 完了条件の本番動作確認で実施） |

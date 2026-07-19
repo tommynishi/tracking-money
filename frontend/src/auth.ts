@@ -35,6 +35,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => {
       Line({
         clientId: env.LINE_CHANNEL_ID,
         clientSecret: env.LINE_CHANNEL_SECRET,
+        // 既定スコープの email は権限申請済みチャネルでないと invalid_scope になるため要求しない
+        // （メールアドレスは使用しない・requirements.md 認証要件）
+        authorization: { params: { scope: "openid profile" } },
       }),
     ],
     callbacks: {
