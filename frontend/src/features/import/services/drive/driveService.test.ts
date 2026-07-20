@@ -1,6 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveOriginalToDrive } from "./driveService";
+
+beforeEach(() => {
+  for (const key of [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "AUTH_SECRET",
+    "LINE_CHANNEL_ID",
+    "LINE_CHANNEL_SECRET",
+    "LINE_MESSAGING_CHANNEL_ACCESS_TOKEN",
+    "OPENAI_API_KEY",
+    "GOOGLE_SERVICE_ACCOUNT_KEY",
+    "CRON_SECRET",
+  ]) {
+    vi.stubEnv(key, "test-value");
+  }
+  vi.stubEnv("GOOGLE_DRIVE_ROOT_FOLDER_ID", "root-folder-1");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const input = {
   ledgerId: "ledger-1",
@@ -26,7 +45,7 @@ describe("saveOriginalToDrive", () => {
 
     const result = await saveOriginalToDrive({ drive, folderRepository }, input);
 
-    expect(drive.createFolder).toHaveBeenCalledWith("ledger-ledger-1");
+    expect(drive.createFolder).toHaveBeenCalledWith("ledger-ledger-1", "root-folder-1");
     expect(folderRepository.setDriveFolderId).toHaveBeenCalledWith("ledger-1", "folder-1");
     expect(drive.uploadFile).toHaveBeenCalledWith({
       name: input.fileName,

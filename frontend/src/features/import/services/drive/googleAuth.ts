@@ -39,6 +39,9 @@ export const getDriveAccessToken = async (): Promise<string> => {
   }
 
   const { GOOGLE_SERVICE_ACCOUNT_KEY } = getServerEnv();
+  if (GOOGLE_SERVICE_ACCOUNT_KEY === "") {
+    throw new ExternalServiceError("Drive保存は未設定のため利用できません");
+  }
   const parsedKey = serviceAccountSchema.safeParse(JSON.parse(GOOGLE_SERVICE_ACCOUNT_KEY));
   if (!parsedKey.success) {
     throw new ExternalServiceError("Googleサービスアカウントの設定が不正です");

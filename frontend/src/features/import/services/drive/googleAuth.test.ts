@@ -31,6 +31,7 @@ describe("getDriveAccessToken", () => {
       "LINE_CHANNEL_SECRET",
       "LINE_MESSAGING_CHANNEL_ACCESS_TOKEN",
       "OPENAI_API_KEY",
+      "GOOGLE_DRIVE_ROOT_FOLDER_ID",
       "CRON_SECRET",
     ]) {
       vi.stubEnv(key, "test-value");
@@ -67,5 +68,11 @@ describe("getDriveAccessToken", () => {
     vi.stubEnv("GOOGLE_SERVICE_ACCOUNT_KEY", JSON.stringify({ foo: "bar" }));
     const { getDriveAccessToken } = await loadGoogleAuth();
     await expect(getDriveAccessToken()).rejects.toThrow("設定が不正");
+  });
+
+  it("Drive未設定（GOOGLE_SERVICE_ACCOUNT_KEY未設定）は ExternalServiceError", async () => {
+    vi.stubEnv("GOOGLE_SERVICE_ACCOUNT_KEY", "");
+    const { getDriveAccessToken } = await loadGoogleAuth();
+    await expect(getDriveAccessToken()).rejects.toThrow("未設定のため利用できません");
   });
 });

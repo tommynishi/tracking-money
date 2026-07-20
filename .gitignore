@@ -16,3 +16,6 @@ __pycache__/
 
 # 実カード明細サンプル（個人情報を含む・コミット禁止）
 samples/
+
+# Google service account key file (do not commit)
+tracking-money-*.json

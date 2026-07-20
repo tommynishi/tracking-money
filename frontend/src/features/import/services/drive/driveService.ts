@@ -3,6 +3,8 @@
  * 家計簿フォルダが未作成なら作成して ledgers.drive_folder_id に保存し、原本を格納する。
  * 保存失敗は取込を失敗させず drive_status: "failed" として返す（FR-DRIVE-06）。
  */
+import { getServerEnv } from "@/shared/config/env";
+
 import type { LedgerDriveFolderRepository } from "../../repositories/ledgerDriveFolderRepository";
 
 import type { DriveClient } from "./driveClient";
@@ -35,7 +37,11 @@ export const saveOriginalToDrive = async (
   try {
     let folderId = await deps.folderRepository.getDriveFolderId(input.ledgerId);
     if (folderId === null) {
-      folderId = await deps.drive.createFolder(folderNameFor(input.ledgerId));
+      const { GOOGLE_DRIVE_ROOT_FOLDER_ID } = getServerEnv();
+      folderId = await deps.drive.createFolder(
+        folderNameFor(input.ledgerId),
+        GOOGLE_DRIVE_ROOT_FOLDER_ID,
+      );
       await deps.folderRepository.setDriveFolderId(input.ledgerId, folderId);
     }
     const uploaded = await deps.drive.uploadFile({

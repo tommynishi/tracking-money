@@ -19,6 +19,7 @@ describe("createOpenAiClassifier", () => {
       "LINE_MESSAGING_CHANNEL_ACCESS_TOKEN",
       "OPENAI_API_KEY",
       "GOOGLE_SERVICE_ACCOUNT_KEY",
+      "GOOGLE_DRIVE_ROOT_FOLDER_ID",
       "CRON_SECRET",
     ]) {
       vi.stubEnv(key, "test-value");

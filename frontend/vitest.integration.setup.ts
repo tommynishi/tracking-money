@@ -20,6 +20,7 @@ const defaults: Readonly<Record<string, string>> = {
   LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: "integration-test",
   OPENAI_API_KEY: "integration-test",
   GOOGLE_SERVICE_ACCOUNT_KEY: "integration-test",
+  GOOGLE_DRIVE_ROOT_FOLDER_ID: "integration-test",
   CRON_SECRET: "integration-test",
 };
 
