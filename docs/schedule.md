@@ -144,3 +144,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-19 | PR #1（feature/project-init → main）をマージ。CI 通過・main の本番自動デプロイ完了を確認。**Phase 0 / Phase 1 完了**。次は Phase 2（インポート）— 着手前に各カード会社の実CSVサンプル入手が必要 |
 | 2026-07-19 | Phase 2 着手（feature/phase2-import）。実サンプル入手：楽天CSV（UTF-8 BOM）・JCB CSV（Shift_JIS・サマリー行付き）・Epos PDF。個人情報を含むため samples/ へ隔離し .gitignore 追加。2-1 マイグレーション 20260719000200（import_files / csv_column_mappings / category_rules / drive_folder_id / entries FK）をローカル適用済み |
 | 2026-07-20 | 2-2 パーサー基盤（decodeCsv：UTF-8/Shift_JIS 自動判定・parseCsv：RFC4180・StatementParser IF・フォーマット自動判定）と 2-3 楽天・JCB パーサーを実装（features/import）。実サンプルで検証：楽天24行・JCB全行がエラー0でパース（海外利用補足行・キャンセル区切り行はスキップ扱い）。Unit テスト18件追加。Epos/セゾンのCSVは実サンプル未入手のため未対応（Epos は PDF のみ入手済み→2-9） |
+| 2026-07-20 | 2-5 重複チェックを実装：明細単位（markDuplicateRows・正規化摘要で照合・entryRepository.listDuplicateKeys 追加・FR-DUP-01）とファイル単位（computeFileHash SHA-256・isFileAlreadyImported・FR-DUP-03）。スキップ/取込の選択（FR-DUP-02）はプレビューUI（2-8）で実装 |

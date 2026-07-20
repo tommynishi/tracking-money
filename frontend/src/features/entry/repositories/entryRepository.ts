@@ -109,6 +109,13 @@ export type UpdateEntryFields = {
   readonly memo?: string | null;
 };
 
+/** 重複チェック用の既存明細キー（FR-DUP-01・idx_entries_dup_check と対応）。 */
+export type EntryDuplicateKey = {
+  readonly usedOn: string;
+  readonly amount: number;
+  readonly normalizedDescription: string;
+};
+
 export type EntryRepository = {
   create(input: CreateEntryDbInput): Promise<Entry>;
   getById(ledgerId: string, entryId: string): Promise<Entry | null>;
@@ -118,6 +125,8 @@ export type EntryRepository = {
     ledgerId: string,
     query: EntryListQuery,
   ): Promise<{ items: EntryListItem[]; totalCount: number }>;
+  /** 指定期間の既存明細キーを返す（インポートの重複判定用・FR-DUP-01）。 */
+  listDuplicateKeys(ledgerId: string, from: string, to: string): Promise<EntryDuplicateKey[]>;
 };
 
 export const createEntryRepository = (client: SupabaseClient): EntryRepository => ({
@@ -242,5 +251,34 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
       items: z.array(entryListRowSchema).parse(data).map(toEntryListItem),
       totalCount: count ?? 0,
     };
+  },
+
+  async listDuplicateKeys(ledgerId, from, to) {
+    const { data, error } = await client
+      .from(ENTRIES_TABLE)
+      .select("used_on, amount, normalized_description")
+      .eq("ledger_id", ledgerId)
+      .gte("used_on", from)
+      .lte("used_on", to)
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new Error(`Failed to list duplicate keys: ${error.message}`);
+    }
+
+    return z
+      .array(
+        z.object({
+          used_on: z.string(),
+          amount: z.number().int(),
+          normalized_description: z.string(),
+        }),
+      )
+      .parse(data)
+      .map((row) => ({
+        usedOn: row.used_on,
+        amount: row.amount,
+        normalizedDescription: row.normalized_description,
+      }));
   },
 });

@@ -53,6 +53,7 @@ const createEntryRepoStub = (getByIdResult: Entry | null = entry): EntryReposito
   updateFields: vi.fn(async (_ledgerId, _entryId, fields) => ({ ...entry, ...fields })),
   softDelete: vi.fn(async () => undefined),
   list: vi.fn(async () => ({ items: [], totalCount: 0 })),
+  listDuplicateKeys: vi.fn(async () => []),
 });
 
 const createDeps = (
