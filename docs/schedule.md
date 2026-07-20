@@ -74,9 +74,11 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2-9 | PDF OCR（OpenAI Vision・カード明細PDF） | 2-8 |
 | 2-10 | 取込履歴（SCR-10） | 2-8 |
 
-**完了条件**：対応4社のCSVと明細PDFを実ファイルで取込でき、重複がスキップされ、原本がDriveへ保存される。
+**完了条件**：対応カード（楽天・JCB・汎用CSV・PDF明細）を実ファイルで取込でき、重複がスキップされる。
 
-**リスク**：各社CSV・PDFの実サンプル入手（requirements.md 未確定事項）。入手できるカードから順に対応する。
+**リスク**：各社CSV・PDFの実サンプル入手（requirements.md 未確定事項）。入手できるカードから順に対応する。Epos・セゾンは実CSV未入手のため未対応（Eposは PDF OCR で代替可）。
+
+**Google Drive 保存（2-6）は見送り**：サービスアカウントは Drive の保存容量を持たず、人間のフォルダを共有しても書き込みが拒否される（storageQuotaExceeded、2026-07-20 実機検証）。回避には Google Workspace 契約（有料）かユーザーOAuth連携（実装変更を伴う）が必要でどちらも見送り。未設定のままアプリは動作し、取込自体は成功、drive_status は常に failed となる（FR-DRIVE-06 のフォールバック設計どおり）。
 
 ---
 
@@ -142,3 +144,13 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-19 | Supabase 本番プロジェクト TrackingMoney（xfqddwkykosswtymzwqq・ap-southeast-1）を作成（ユーザー作業）し、CLI で link・全9マイグレーションを db push で適用（migration list で一致確認）。Vercel の Supabase 3変数を本番実値へ差し替え再デプロイ。本番の全環境変数が実値になり、残るは本番での LINE ログイン通し確認（Phase 1 完了条件） |
 | 2026-07-19 | 本番 LINE ログインが 400 になる問題を修正：(1) CLI パイプ登録で環境変数先頭に BOM が混入していたため Vercel REST API で全変数を登録し直し (2) Root Directory 設定後の CLI デプロイはリポジトリルートから実行が必要（frontend/ からの前回デプロイは失敗していた）。あわせて Supabase 本番をユーザー作り直しの新プロジェクト（uxbdatziyghatuvrihnd）へ切替（link・全9マイグレーション適用・Vercel 3変数差し替え）。**本番で LINE ログイン成功を確認**。残りは main への PR 作成・CI 初回実行・マージ（本番は Git 連携により自動デプロイへ移行） |
 | 2026-07-19 | PR #1（feature/project-init → main）をマージ。CI 通過・main の本番自動デプロイ完了を確認。**Phase 0 / Phase 1 完了**。次は Phase 2（インポート）— 着手前に各カード会社の実CSVサンプル入手が必要 |
+| 2026-07-19 | Phase 2 着手（feature/phase2-import）。実サンプル入手：楽天CSV（UTF-8 BOM）・JCB CSV（Shift_JIS・サマリー行付き）・Epos PDF。個人情報を含むため samples/ へ隔離し .gitignore 追加。2-1 マイグレーション 20260719000200（import_files / csv_column_mappings / category_rules / drive_folder_id / entries FK）をローカル適用済み |
+| 2026-07-20 | 2-2 パーサー基盤（decodeCsv：UTF-8/Shift_JIS 自動判定・parseCsv：RFC4180・StatementParser IF・フォーマット自動判定）と 2-3 楽天・JCB パーサーを実装（features/import）。実サンプルで検証：楽天24行・JCB全行がエラー0でパース（海外利用補足行・キャンセル区切り行はスキップ扱い）。Unit テスト18件追加。Epos/セゾンのCSVは実サンプル未入手のため未対応（Epos は PDF のみ入手済み→2-9） |
+| 2026-07-20 | 2-5 重複チェックを実装：明細単位（markDuplicateRows・正規化摘要で照合・entryRepository.listDuplicateKeys 追加・FR-DUP-01）とファイル単位（computeFileHash SHA-256・isFileAlreadyImported・FR-DUP-03）。スキップ/取込の選択（FR-DUP-02）はプレビューUI（2-8）で実装 |
+| 2026-07-20 | 2-4 汎用CSVのドメイン層を実装：columnMappingSchema（zod・日付形式3種）・parseGenericCsv（マッピング指定パース）・csvColumnMappingRepository（一覧/取得/保存/変更/削除・名前重複は409）。列マッピングUI（SCR-09 Step1分岐）と Route Handler（api.md 8）は 2-8 と同時に実装 |
+| 2026-07-20 | 2-7 カテゴリ自動分類を実装：categoryRuleRepository（一括照会・upsert）・categorizeRows（ルール優先→AI→「その他」フォールバック・AI障害時も継続 FR-AICAT-04・同一摘要は1回だけ問合せ）・createOpenAiClassifier（gpt-4o-mini・Structured Outputs・50件バッチ・SDK不使用で fetch 直叩き）。ルール学習の書き込みは confirm API（2-8）で配線 |
+| 2026-07-20 | 2-6 Google Drive 連携を実装：googleAuth（サービスアカウントJWT RS256・トークンキャッシュ）・driveClient（フォルダ作成/multipartアップロード/ダウンロード/削除・fetch直・SDK不使用）・saveOriginalToDrive（家計簿フォルダ自動作成→原本保存・失敗時は drive_status=failed で取込継続 FR-DRIVE-06）・ledgerDriveFolderRepository。**動作にはサービスアカウント作成（ユーザー作業）と GOOGLE_SERVICE_ACCOUNT_KEY 設定が必要** |
+| 2026-07-20 | 2-8（API側）：analyzeImport / confirmImport サービスと Route Handler 8本（api.md 7.1〜7.6・8.1〜8.4）を実装。重複情報を API 形式（entryId付き）へ拡張、entries へ一括登録 createMany 追加、確定時にカテゴリ選択を学習ルールへ保存。Integration Test 4件追加（認可全対象・解析→確定→履歴→再解析の重複検知・マッピングCRUD。外部APIスタブで AI/Drive 障害時フォールバックも実DB検証）。残りは SCR-09/10 の UI と 2-9 PDF OCR |
+| 2026-07-20 | 2-8（UI）・2-10 完了：SCR-09 インポートウィザード（3ステップ・フォーマット選択/汎用列マッピング＋保存・DUPLICATE_FILE の force 再実行・FORMAT_UNKNOWN 誘導・重複候補は既定スキップ＋一括ON/OFF・カテゴリ編集と判定元表示・エラー行別枠・結果表示）と SCR-10 取込履歴（一覧・詳細モーダル・原本ダウンロード・Drive原本削除確認）。ナビへ取込/取込履歴を追加、apiFetch を FormData 対応、formatDateTime 追加。残りは 2-9 PDF OCR と Epos/セゾンCSV（実サンプル待ち） |
+| 2026-07-20 | 2-9 PDF OCR を実装：createPdfStatementOcr（OpenAI へ PDF を直接添付・Structured Outputs で明細行抽出・依存追加なし）。analyzeImport の PDF 分岐（format=pdf・OCR失敗は import_files を failed で記録し 502 AI_UNAVAILABLE・FR-PDF-03）。**Phase 2 のコード実装は Epos/セゾンCSVパーサー（実サンプル未入手）を除き完了**。実動作確認には OPENAI_API_KEY（実値）と Google サービスアカウント（ユーザー作業）が必要 |
+| 2026-07-20 | 方針決定：**OpenAI は課金しない**（AI分類は「その他」フォールバック＋確定時カテゴリの学習ルールで運用）。Google サービスアカウントを作成・Drive API 有効化まで実施したが、**サービスアカウントは保存容量を持たず、人間のフォルダを共有しても書き込み拒否**（storageQuotaExceeded）と実機検証で判明。回避には Google Workspace 契約かユーザーOAuth連携が必要でどちらも見送り、**2-6 Google Drive保存は見送り**。GOOGLE_SERVICE_ACCOUNT_KEY / GOOGLE_DRIVE_ROOT_FOLDER_ID を env.ts で任意化し未設定でも動作するよう変更（テスト追加・184件）。ローカルで楽天CSV実ファイルの取込→確定→履歴を実ブラウザ確認済み（Drive保存は想定通り failed）。**Phase 2 は Epos/セゾンCSVパーサー（実サンプル未入手）を除き完了** |

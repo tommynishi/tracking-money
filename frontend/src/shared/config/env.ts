@@ -16,7 +16,9 @@ const serverEnvSchema = z.object({
   LINE_CHANNEL_SECRET: nonEmpty("LINE_CHANNEL_SECRET"),
   LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: nonEmpty("LINE_MESSAGING_CHANNEL_ACCESS_TOKEN"),
   OPENAI_API_KEY: nonEmpty("OPENAI_API_KEY"),
-  GOOGLE_SERVICE_ACCOUNT_KEY: nonEmpty("GOOGLE_SERVICE_ACCOUNT_KEY"),
+  // Drive 保存は未対応（サービスアカウントは Drive の保存容量を持たないため）。設定時のみ有効化される。
+  GOOGLE_SERVICE_ACCOUNT_KEY: z.string().optional().default(""),
+  GOOGLE_DRIVE_ROOT_FOLDER_ID: z.string().optional().default(""),
   CRON_SECRET: nonEmpty("CRON_SECRET"),
 });
 

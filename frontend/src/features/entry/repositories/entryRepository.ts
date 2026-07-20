@@ -96,6 +96,8 @@ export type CreateEntryDbInput = {
   readonly paymentMethod: string | null;
   readonly memo: string | null;
   readonly source: EntrySource;
+  /** 取込由来の場合の import_files.id（手入力は指定しない） */
+  readonly importFileId?: string;
   readonly createdByUserId: string;
 };
 
@@ -109,6 +111,14 @@ export type UpdateEntryFields = {
   readonly memo?: string | null;
 };
 
+/** 重複チェック用の既存明細キー（FR-DUP-01・idx_entries_dup_check と対応）。 */
+export type EntryDuplicateKey = {
+  readonly entryId: string;
+  readonly usedOn: string;
+  readonly amount: number;
+  readonly normalizedDescription: string;
+};
+
 export type EntryRepository = {
   create(input: CreateEntryDbInput): Promise<Entry>;
   getById(ledgerId: string, entryId: string): Promise<Entry | null>;
@@ -118,24 +128,31 @@ export type EntryRepository = {
     ledgerId: string,
     query: EntryListQuery,
   ): Promise<{ items: EntryListItem[]; totalCount: number }>;
+  /** 指定期間の既存明細キーを返す（インポートの重複判定用・FR-DUP-01）。 */
+  listDuplicateKeys(ledgerId: string, from: string, to: string): Promise<EntryDuplicateKey[]>;
+  /** 取込確定用の一括登録（api.md 7.2。挿入行数の削減のため個別 create は使わない）。 */
+  createMany(inputs: readonly CreateEntryDbInput[]): Promise<void>;
 };
+
+const toInsertRow = (input: CreateEntryDbInput): Record<string, unknown> => ({
+  ledger_id: input.ledgerId,
+  category_id: input.categoryId,
+  used_on: input.usedOn,
+  amount: input.amount,
+  description: input.description,
+  normalized_description: input.normalizedDescription,
+  payment_method: input.paymentMethod,
+  memo: input.memo,
+  source: input.source,
+  import_file_id: input.importFileId ?? null,
+  created_by_user_id: input.createdByUserId,
+});
 
 export const createEntryRepository = (client: SupabaseClient): EntryRepository => ({
   async create(input) {
     const { data, error } = await client
       .from(ENTRIES_TABLE)
-      .insert({
-        ledger_id: input.ledgerId,
-        category_id: input.categoryId,
-        used_on: input.usedOn,
-        amount: input.amount,
-        description: input.description,
-        normalized_description: input.normalizedDescription,
-        payment_method: input.paymentMethod,
-        memo: input.memo,
-        source: input.source,
-        created_by_user_id: input.createdByUserId,
-      })
+      .insert(toInsertRow(input))
       .select(ENTRY_COLUMNS)
       .single();
 
@@ -242,5 +259,46 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
       items: z.array(entryListRowSchema).parse(data).map(toEntryListItem),
       totalCount: count ?? 0,
     };
+  },
+
+  async listDuplicateKeys(ledgerId, from, to) {
+    const { data, error } = await client
+      .from(ENTRIES_TABLE)
+      .select("id, used_on, amount, normalized_description")
+      .eq("ledger_id", ledgerId)
+      .gte("used_on", from)
+      .lte("used_on", to)
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new Error(`Failed to list duplicate keys: ${error.message}`);
+    }
+
+    return z
+      .array(
+        z.object({
+          id: z.uuid(),
+          used_on: z.string(),
+          amount: z.number().int(),
+          normalized_description: z.string(),
+        }),
+      )
+      .parse(data)
+      .map((row) => ({
+        entryId: row.id,
+        usedOn: row.used_on,
+        amount: row.amount,
+        normalizedDescription: row.normalized_description,
+      }));
+  },
+
+  async createMany(inputs) {
+    if (inputs.length === 0) {
+      return;
+    }
+    const { error } = await client.from(ENTRIES_TABLE).insert(inputs.map(toInsertRow));
+    if (error) {
+      throw new Error(`Failed to create entries: ${error.message}`);
+    }
   },
 });

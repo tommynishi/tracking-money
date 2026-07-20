@@ -44,3 +44,9 @@ export const formatDateFull = (value: string | Date): string => {
   const date = toDate(value);
   return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}`;
 };
+
+/** 履歴向けの日時「YYYY/MM/DD HH:mm」（取込履歴の取込日時等）。 */
+export const formatDateTime = (value: string | Date): string => {
+  const date = toDate(value);
+  return `${formatDateFull(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+};

@@ -32,9 +32,13 @@ const errorBodySchemaGuard = (
 
 /** 認証は HttpOnly Cookie（同一オリジン）。302 で /login へ飛ばず 401 を検出できるようにする。 */
 export const apiFetch = async <T>(path: string, init?: RequestInit): Promise<ApiResult<T>> => {
+  // FormData（multipart）は boundary をブラウザに任せるため Content-Type を指定しない
   const response = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers:
+      init?.body instanceof FormData
+        ? init?.headers
+        : { "Content-Type": "application/json", ...init?.headers },
   });
 
   if (response.status === 204) {

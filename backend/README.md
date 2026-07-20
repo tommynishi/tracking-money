@@ -76,10 +76,10 @@ npm run test:integration
 | `20260710000200_reorder_categories_set_based.sql` | `reorder_categories` を unnest による単一 UPDATE へ変更（空配列で失敗しない） | Phase 1-7 |
 | `20260710000300_accept_family_invitation_returns_row.sql` | `accept_family_invitation` の戻り値を更新後の招待行へ変更（承諾後の再取得を不要に） | Phase 1-6 |
 | `20260719000100_service_role_grants.sql` | アクセス権限の明示化：service_role へ全テーブルの DML を付与し、anon / authenticated の直接アクセスを全面拒否（default privileges 含む）。新しい CLI のローカル既定では DML が付与されないため必須 | Phase 0-3 |
+| `20260719000200_phase2_import_tables.sql` | import_files / csv_column_mappings / category_rules を追加。ledgers.drive_folder_id 追加。entries.import_file_id へ FK 付与（database.md 3.7〜3.9） | Phase 2-1 |
 
 ### Phaseごとの予定（schedule.md）
 
-- **Phase 2-1**: `import_files` / `csv_column_mappings` / `category_rules` を追加。`ledgers.drive_folder_id` 追加。`entries.import_file_id` に `import_files` への FK を付与
 - **Phase 3-3**: `analysis_caches` を追加
 
 ## 設計上の注意
