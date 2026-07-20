@@ -132,6 +132,8 @@ export type EntryRepository = {
   listDuplicateKeys(ledgerId: string, from: string, to: string): Promise<EntryDuplicateKey[]>;
   /** 取込確定用の一括登録（api.md 7.2。挿入行数の削減のため個別 create は使わない）。 */
   createMany(inputs: readonly CreateEntryDbInput[]): Promise<void>;
+  /** ユーザーが登録した最新の明細日時（未登録検知リマインド用・FR-NOTIFY-02）。登録がなければ null。 */
+  getLastCreatedAtByUser(userId: string): Promise<string | null>;
 };
 
 const toInsertRow = (input: CreateEntryDbInput): Record<string, unknown> => ({
@@ -300,5 +302,21 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
     if (error) {
       throw new Error(`Failed to create entries: ${error.message}`);
     }
+  },
+
+  async getLastCreatedAtByUser(userId) {
+    const { data, error } = await client
+      .from(ENTRIES_TABLE)
+      .select("created_at")
+      .eq("created_by_user_id", userId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to get last entry created_at: ${error.message}`);
+    }
+    return data === null ? null : z.object({ created_at: z.string() }).parse(data).created_at;
   },
 });

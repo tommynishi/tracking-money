@@ -69,4 +69,12 @@ describe("createPdfStatementOcr", () => {
       AiUnavailableError,
     );
   });
+
+  it("OPENAI_API_KEY未設定は AiUnavailableError（fetchは呼ばない）", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.resetModules();
+    const { createPdfStatementOcr: createFresh } = await import("./pdfStatementOcr");
+    await expect(createFresh().parse(pdfBytes, "meisai.pdf")).rejects.toThrow("未設定");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
 });

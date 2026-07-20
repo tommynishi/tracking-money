@@ -46,6 +46,9 @@ export type PdfStatementOcr = {
 export const createPdfStatementOcr = (): PdfStatementOcr => ({
   async parse(bytes, fileName) {
     const { OPENAI_API_KEY } = getServerEnv();
+    if (OPENAI_API_KEY === "") {
+      throw new AiUnavailableError("PDF解析は未設定のため利用できません");
+    }
     let response: Response;
     try {
       response = await fetch(OPENAI_URL, {

@@ -15,7 +15,8 @@ const serverEnvSchema = z.object({
   LINE_CHANNEL_ID: nonEmpty("LINE_CHANNEL_ID"),
   LINE_CHANNEL_SECRET: nonEmpty("LINE_CHANNEL_SECRET"),
   LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: nonEmpty("LINE_MESSAGING_CHANNEL_ACCESS_TOKEN"),
-  OPENAI_API_KEY: nonEmpty("OPENAI_API_KEY"),
+  // AI機能（分類・OCR・所見）は課金しない方針のため未使用（2026-07-20）。設定時のみ有効化される。
+  OPENAI_API_KEY: z.string().optional().default(""),
   // Drive 保存は未対応（サービスアカウントは Drive の保存容量を持たないため）。設定時のみ有効化される。
   GOOGLE_SERVICE_ACCOUNT_KEY: z.string().optional().default(""),
   GOOGLE_DRIVE_ROOT_FOLDER_ID: z.string().optional().default(""),

@@ -55,6 +55,7 @@ const createEntryRepoStub = (getByIdResult: Entry | null = entry): EntryReposito
   list: vi.fn(async () => ({ items: [], totalCount: 0 })),
   listDuplicateKeys: vi.fn(async () => []),
   createMany: vi.fn(async () => undefined),
+  getLastCreatedAtByUser: vi.fn(async () => null),
 });
 
 const createDeps = (
