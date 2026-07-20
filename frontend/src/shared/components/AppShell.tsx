@@ -10,6 +10,8 @@ import { ThemeToggle } from "@/shared/theme/ThemeToggle";
 /** グローバルナビゲーション（screen.md 3.1。SCR-02/09/11 は該当 Phase で追加）。 */
 const NAV_ITEMS = [
   { href: "/entries", label: "明細" },
+  { href: "/import", label: "取込" },
+  { href: "/imports", label: "取込履歴" },
   { href: "/categories", label: "カテゴリ" },
   { href: "/ledger", label: "家計簿" },
   { href: "/invitations", label: "招待" },
