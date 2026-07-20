@@ -9,13 +9,21 @@ import type { EntryDuplicateKey, EntryRepository } from "@/features/entry/reposi
 
 import type { ParsedRow } from "../types";
 
-/** プレビュー用の行（正規化済み摘要と重複候補フラグを付与）。 */
-export type PreviewRow = ParsedRow & {
-  readonly normalizedDescription: string;
-  readonly isDuplicate: boolean;
+/** 一致した既存明細の情報（api.md 7.1 の duplicate）。 */
+export type DuplicateMatch = {
+  readonly entryId: string;
+  readonly usedOn: string;
+  readonly amount: number;
 };
 
-const toKey = (key: EntryDuplicateKey): string =>
+/** プレビュー用の行（正規化済み摘要と重複候補情報を付与）。 */
+export type PreviewRow = ParsedRow & {
+  readonly normalizedDescription: string;
+  /** 重複候補でなければ null（FR-DUP-01） */
+  readonly duplicate: DuplicateMatch | null;
+};
+
+const toKey = (key: Pick<EntryDuplicateKey, "usedOn" | "amount" | "normalizedDescription">): string =>
   `${key.usedOn}|${key.amount}|${key.normalizedDescription}`;
 
 /**
@@ -32,16 +40,20 @@ export const markDuplicateRows = async (
   }
   const dates = rows.map((row) => row.usedOn).sort();
   const existing = await repository.listDuplicateKeys(ledgerId, dates[0], dates[dates.length - 1]);
-  const existingKeys = new Set(existing.map(toKey));
+  const existingByKey = new Map(existing.map((key) => [toKey(key), key]));
 
   return rows.map((row) => {
     const normalized = normalizeDescription(row.description);
+    const match = existingByKey.get(
+      toKey({ usedOn: row.usedOn, amount: row.amount, normalizedDescription: normalized }),
+    );
     return {
       ...row,
       normalizedDescription: normalized,
-      isDuplicate: existingKeys.has(
-        toKey({ usedOn: row.usedOn, amount: row.amount, normalizedDescription: normalized }),
-      ),
+      duplicate:
+        match === undefined
+          ? null
+          : { entryId: match.entryId, usedOn: match.usedOn, amount: match.amount },
     };
   });
 };

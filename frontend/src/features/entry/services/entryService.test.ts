@@ -54,6 +54,7 @@ const createEntryRepoStub = (getByIdResult: Entry | null = entry): EntryReposito
   softDelete: vi.fn(async () => undefined),
   list: vi.fn(async () => ({ items: [], totalCount: 0 })),
   listDuplicateKeys: vi.fn(async () => []),
+  createMany: vi.fn(async () => undefined),
 });
 
 const createDeps = (

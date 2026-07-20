@@ -28,7 +28,7 @@ const row = (rowNumber: number, description: string): PreviewRow => ({
   amount: 100,
   description,
   normalizedDescription: description,
-  isDuplicate: false,
+  duplicate: null,
 });
 
 describe("categorizeRows", () => {
