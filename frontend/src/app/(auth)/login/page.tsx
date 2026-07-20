@@ -1,7 +1,7 @@
 /**
  * SCR-01 ログイン（screen.md・FR-AUTH-01/02）。
- * 「LINEでログイン」から Auth.js のサインインを開始し、成功時は明細一覧へ着地する
- * （Phase 1〜2 のログイン後トップは /entries・screen.md 2）。
+ * 「LINEでログイン」から Auth.js のサインインを開始し、成功時はダッシュボードへ着地する
+ * （Phase 3 でダッシュボード導入後のログイン後トップは /dashboard・screen.md 2）。
  */
 import { redirect } from "next/navigation";
 
@@ -17,7 +17,7 @@ export default async function LoginPage({
 }) {
   const session = await auth();
   if (session?.user) {
-    redirect("/entries");
+    redirect("/dashboard");
   }
 
   const { error } = await searchParams;
