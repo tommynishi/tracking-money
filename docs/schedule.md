@@ -74,9 +74,11 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2-9 | PDF OCR（OpenAI Vision・カード明細PDF） | 2-8 |
 | 2-10 | 取込履歴（SCR-10） | 2-8 |
 
-**完了条件**：対応4社のCSVと明細PDFを実ファイルで取込でき、重複がスキップされ、原本がDriveへ保存される。
+**完了条件**：対応カード（楽天・JCB・汎用CSV・PDF明細）を実ファイルで取込でき、重複がスキップされる。
 
-**リスク**：各社CSV・PDFの実サンプル入手（requirements.md 未確定事項）。入手できるカードから順に対応する。
+**リスク**：各社CSV・PDFの実サンプル入手（requirements.md 未確定事項）。入手できるカードから順に対応する。Epos・セゾンは実CSV未入手のため未対応（Eposは PDF OCR で代替可）。
+
+**Google Drive 保存（2-6）は見送り**：サービスアカウントは Drive の保存容量を持たず、人間のフォルダを共有しても書き込みが拒否される（storageQuotaExceeded、2026-07-20 実機検証）。回避には Google Workspace 契約（有料）かユーザーOAuth連携（実装変更を伴う）が必要でどちらも見送り。未設定のままアプリは動作し、取込自体は成功、drive_status は常に failed となる（FR-DRIVE-06 のフォールバック設計どおり）。
 
 ---
 
@@ -151,3 +153,4 @@ Phase 0（準備） → Phase 1（基盤＋家計簿CRUD） → Phase 2（イン
 | 2026-07-20 | 2-8（API側）：analyzeImport / confirmImport サービスと Route Handler 8本（api.md 7.1〜7.6・8.1〜8.4）を実装。重複情報を API 形式（entryId付き）へ拡張、entries へ一括登録 createMany 追加、確定時にカテゴリ選択を学習ルールへ保存。Integration Test 4件追加（認可全対象・解析→確定→履歴→再解析の重複検知・マッピングCRUD。外部APIスタブで AI/Drive 障害時フォールバックも実DB検証）。残りは SCR-09/10 の UI と 2-9 PDF OCR |
 | 2026-07-20 | 2-8（UI）・2-10 完了：SCR-09 インポートウィザード（3ステップ・フォーマット選択/汎用列マッピング＋保存・DUPLICATE_FILE の force 再実行・FORMAT_UNKNOWN 誘導・重複候補は既定スキップ＋一括ON/OFF・カテゴリ編集と判定元表示・エラー行別枠・結果表示）と SCR-10 取込履歴（一覧・詳細モーダル・原本ダウンロード・Drive原本削除確認）。ナビへ取込/取込履歴を追加、apiFetch を FormData 対応、formatDateTime 追加。残りは 2-9 PDF OCR と Epos/セゾンCSV（実サンプル待ち） |
 | 2026-07-20 | 2-9 PDF OCR を実装：createPdfStatementOcr（OpenAI へ PDF を直接添付・Structured Outputs で明細行抽出・依存追加なし）。analyzeImport の PDF 分岐（format=pdf・OCR失敗は import_files を failed で記録し 502 AI_UNAVAILABLE・FR-PDF-03）。**Phase 2 のコード実装は Epos/セゾンCSVパーサー（実サンプル未入手）を除き完了**。実動作確認には OPENAI_API_KEY（実値）と Google サービスアカウント（ユーザー作業）が必要 |
+| 2026-07-20 | 方針決定：**OpenAI は課金しない**（AI分類は「その他」フォールバック＋確定時カテゴリの学習ルールで運用）。Google サービスアカウントを作成・Drive API 有効化まで実施したが、**サービスアカウントは保存容量を持たず、人間のフォルダを共有しても書き込み拒否**（storageQuotaExceeded）と実機検証で判明。回避には Google Workspace 契約かユーザーOAuth連携が必要でどちらも見送り、**2-6 Google Drive保存は見送り**。GOOGLE_SERVICE_ACCOUNT_KEY / GOOGLE_DRIVE_ROOT_FOLDER_ID を env.ts で任意化し未設定でも動作するよう変更（テスト追加・184件）。ローカルで楽天CSV実ファイルの取込→確定→履歴を実ブラウザ確認済み（Drive保存は想定通り failed）。**Phase 2 は Epos/セゾンCSVパーサー（実サンプル未入手）を除き完了** |
