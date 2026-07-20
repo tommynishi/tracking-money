@@ -11,7 +11,7 @@ import { assertLedgerAccess } from "@/features/ledger/services/authorization";
 
 import { createEntryAnalysisRepository } from "@/features/analysis/repositories/entryAnalysisRepository";
 import { getTrend } from "@/features/analysis/services/analysisService";
-import { todayInJst } from "@/shared/utils/month";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 const paramsSchema = z.object({ ledgerId: z.uuid() });
 const querySchema = z.object({
@@ -37,7 +37,7 @@ export async function GET(
         categoryRepository: createCategoryRepository(client),
       },
       ledgerId,
-      query.month ?? todayInJst().slice(0, 7),
+      query.month ?? currentBillingMonth(),
       query.months,
       query.categoryId,
     );

@@ -12,7 +12,7 @@ import type { StatementFormat } from "../types";
 const TABLE = "import_files";
 const COLUMNS =
   "id, ledger_id, uploaded_by_user_id, file_name, file_type, file_hash, format, status, " +
-  "imported_count, skipped_count, error_count, error_detail, " +
+  "billing_month, imported_count, skipped_count, error_count, error_detail, " +
   "drive_file_id, drive_web_view_link, drive_status, created_at";
 
 const errorDetailSchema = z
@@ -28,6 +28,7 @@ const rowSchema = z.object({
   file_hash: z.string(),
   format: z.enum(["rakuten", "jcb", "epos", "saison", "generic", "pdf"]),
   status: z.enum(["analyzed", "completed", "partial", "failed"]),
+  billing_month: z.string(),
   imported_count: z.number().int(),
   skipped_count: z.number().int(),
   error_count: z.number().int(),
@@ -50,6 +51,7 @@ export type ImportFile = {
   readonly fileHash: string;
   readonly format: StatementFormat;
   readonly status: "analyzed" | "completed" | "partial" | "failed";
+  readonly billingMonth: string;
   readonly importedCount: number;
   readonly skippedCount: number;
   readonly errorCount: number;
@@ -69,6 +71,7 @@ const toImportFile = (row: z.infer<typeof rowSchema>): ImportFile => ({
   fileHash: row.file_hash,
   format: row.format,
   status: row.status,
+  billingMonth: row.billing_month,
   importedCount: row.imported_count,
   skippedCount: row.skipped_count,
   errorCount: row.error_count,
@@ -87,6 +90,7 @@ export type CreateImportFileInput = {
   readonly fileHash: string;
   readonly format: StatementFormat;
   readonly status: "analyzed" | "failed";
+  readonly billingMonth: string;
   readonly errorDetail: readonly ImportErrorRow[] | null;
   readonly driveFileId: string | null;
   readonly driveWebViewLink: string | null;
@@ -130,6 +134,7 @@ export const createImportFileRepository = (client: SupabaseClient): ImportFileRe
         file_hash: input.fileHash,
         format: input.format,
         status: input.status,
+        billing_month: input.billingMonth,
         error_count: input.errorDetail?.length ?? 0,
         error_detail: input.errorDetail,
         drive_file_id: input.driveFileId,

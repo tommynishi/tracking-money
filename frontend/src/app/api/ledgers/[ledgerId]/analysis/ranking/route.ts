@@ -11,7 +11,7 @@ import { assertLedgerAccess } from "@/features/ledger/services/authorization";
 
 import { createEntryAnalysisRepository } from "@/features/analysis/repositories/entryAnalysisRepository";
 import { getRanking } from "@/features/analysis/services/analysisService";
-import { todayInJst } from "@/shared/utils/month";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 const paramsSchema = z.object({ ledgerId: z.uuid() });
 const querySchema = z.object({
@@ -38,7 +38,7 @@ export async function GET(
     const result = await getRanking(
       deps,
       ledgerId,
-      query.month ?? todayInJst().slice(0, 7),
+      query.month ?? currentBillingMonth(),
       query.limit,
     );
     return jsonData(result);

@@ -28,6 +28,7 @@ const analyzedFile: ImportFile = {
   fileHash: "hash",
   format: "rakuten",
   status: "analyzed",
+  billingMonth: "2026-07",
   importedCount: 0,
   skippedCount: 0,
   errorCount: 0,

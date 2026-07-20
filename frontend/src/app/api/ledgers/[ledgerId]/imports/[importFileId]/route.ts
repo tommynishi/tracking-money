@@ -32,6 +32,7 @@ export async function GET(
       fileName: importFile.fileName,
       fileType: importFile.fileType,
       format: importFile.format,
+      billingMonth: importFile.billingMonth,
       status: importFile.status,
       importedCount: importFile.importedCount,
       skippedCount: importFile.skippedCount,

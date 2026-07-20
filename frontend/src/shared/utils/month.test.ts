@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ValidationError } from "@/shared/errors/appError";
 
 import {
+  currentBillingMonth,
   dayOfMonth,
   diffDays,
   lastDayOfMonth,
@@ -66,5 +67,21 @@ describe("dayOfMonth / lastDayOfMonth / diffDays", () => {
   it("経過日数を計算する", () => {
     expect(diffDays("2026-07-20", "2026-07-10")).toBe(10);
     expect(diffDays("2026-07-10", "2026-07-20")).toBe(-10);
+  });
+});
+
+describe("currentBillingMonth", () => {
+  it("10日を含めそれ以前は当月", () => {
+    expect(currentBillingMonth(new Date("2026-07-01T03:00:00Z"))).toBe("2026-07"); // JST 7/1
+    expect(currentBillingMonth(new Date("2026-07-10T14:59:00Z"))).toBe("2026-07"); // JST 7/10 23:59
+  });
+
+  it("10日を超えたら翌月", () => {
+    expect(currentBillingMonth(new Date("2026-07-10T15:01:00Z"))).toBe("2026-08"); // JST 7/11 00:01
+    expect(currentBillingMonth(new Date("2026-07-25T03:00:00Z"))).toBe("2026-08"); // JST 7/25
+  });
+
+  it("年をまたぐ場合も正しく繰り上がる", () => {
+    expect(currentBillingMonth(new Date("2026-12-25T03:00:00Z"))).toBe("2027-01"); // JST 12/25
   });
 });

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/shared/api/client";
 import { Button } from "@/shared/components/Button";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
-import { todayInJst } from "@/shared/utils/month";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
 
@@ -52,7 +52,7 @@ const TABS: { readonly key: Tab; readonly label: string }[] = [
   { key: "advice", label: "提案・予測" },
 ];
 
-const currentMonth = (): string => todayInJst().slice(0, 7);
+const currentMonth = (): string => currentBillingMonth();
 
 /** AI所見（種別ごと）を遅延取得するカード。再生成ボタン付き。 */
 const InsightCard = ({ ledgerId, type, month }: { ledgerId: string; type: string; month: string }) => {

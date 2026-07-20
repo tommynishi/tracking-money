@@ -11,7 +11,7 @@ import { apiFetch, isApiError } from "@/shared/api/client";
 import { Button } from "@/shared/components/Button";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
-import { todayInJst } from "@/shared/utils/month";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 import type { Category } from "@/features/category/types";
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
@@ -79,7 +79,7 @@ export const ImportWizardScreen = () => {
 
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
-  const [billingMonth, setBillingMonth] = useState(todayInJst().slice(0, 7));
+  const [billingMonth, setBillingMonth] = useState(currentBillingMonth());
   const [format, setFormat] = useState<string>("");
   const [savedMappings, setSavedMappings] = useState<SavedMapping[]>([]);
   const [mappingId, setMappingId] = useState("");

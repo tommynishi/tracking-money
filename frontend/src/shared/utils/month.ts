@@ -67,3 +67,18 @@ export const diffDays = (a: string, b: string): number => {
   const toUtc = (s: string): number => Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)));
   return Math.round((toUtc(a) - toUtc(b)) / (1000 * 60 * 60 * 24));
 };
+
+/** 「当月」とみなす締め日（この日を含めて当月・超えたら翌月扱い）。 */
+const BILLING_CUTOFF_DAY = 10;
+
+/**
+ * ダッシュボード・分析・取込の既定の支払月（YYYY-MM）を返す。
+ * 毎月10日を締め日とし、10日を含めそれ以前なら当月、超えたら翌月とする
+ * （カード請求は締め後に翌月扱いになることが多いための実用上のデフォルト。
+ * 個々の明細の支払月はユーザーが自由に指定・変更できる）。
+ */
+export const currentBillingMonth = (now: Date = new Date()): string => {
+  const today = todayInJst(now);
+  const currentMonth = today.slice(0, 7);
+  return dayOfMonth(today) <= BILLING_CUTOFF_DAY ? currentMonth : shiftMonth(currentMonth, 1);
+};

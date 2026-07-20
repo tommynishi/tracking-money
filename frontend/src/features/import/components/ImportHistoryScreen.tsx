@@ -21,6 +21,7 @@ type ImportHistoryItem = {
   readonly fileName: string;
   readonly fileType: "csv" | "pdf";
   readonly format: string;
+  readonly billingMonth: string;
   readonly status: "analyzed" | "completed" | "partial" | "failed";
   readonly importedCount: number;
   readonly skippedCount: number;
@@ -173,6 +174,7 @@ export const ImportHistoryScreen = () => {
                   <th className="px-3 py-2">取込日時</th>
                   <th className="px-3 py-2">ファイル名</th>
                   <th className="px-3 py-2">形式</th>
+                  <th className="px-3 py-2">支払月</th>
                   <th className="px-3 py-2">件数</th>
                   <th className="px-3 py-2">状態</th>
                   <th className="px-3 py-2">Drive</th>
@@ -185,6 +187,7 @@ export const ImportHistoryScreen = () => {
                     <td className="px-3 py-2 whitespace-nowrap">{formatDateTime(item.createdAt)}</td>
                     <td className="px-3 py-2">{item.fileName}</td>
                     <td className="px-3 py-2">{item.format}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{item.billingMonth}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{countsText(item)}</td>
                     <td className="px-3 py-2">{STATUS_LABELS[item.status]}</td>
                     <td className="px-3 py-2">{driveCell(item)}</td>
@@ -204,7 +207,8 @@ export const ImportHistoryScreen = () => {
                   <span className="text-muted">{STATUS_LABELS[item.status]}</span>
                 </div>
                 <p className="text-xs text-muted">
-                  {formatDateTime(item.createdAt)}／{item.format}／{countsText(item)}
+                  {formatDateTime(item.createdAt)}／{item.format}／支払月{item.billingMonth}／
+                  {countsText(item)}
                 </p>
                 <div className="flex items-center justify-between">
                   {driveCell(item)}
@@ -242,7 +246,8 @@ export const ImportHistoryScreen = () => {
         {detail !== null && (
           <div className="space-y-3 text-sm">
             <p className="text-muted">
-              {formatDateTime(detail.createdAt)}／{detail.format}／{STATUS_LABELS[detail.status]}
+              {formatDateTime(detail.createdAt)}／{detail.format}／支払月{detail.billingMonth}／
+              {STATUS_LABELS[detail.status]}
             </p>
             <p className="text-foreground">{countsText(detail)}</p>
             {detail.driveStatus === "failed" && (

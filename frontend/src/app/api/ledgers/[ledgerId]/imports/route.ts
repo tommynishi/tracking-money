@@ -26,6 +26,7 @@ const toListItem = (item: ImportFile): Record<string, unknown> => ({
   fileName: item.fileName,
   fileType: item.fileType,
   format: item.format,
+  billingMonth: item.billingMonth,
   status: item.status,
   importedCount: item.importedCount,
   skippedCount: item.skippedCount,

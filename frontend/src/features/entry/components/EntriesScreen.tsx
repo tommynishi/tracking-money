@@ -12,6 +12,7 @@ import { Button } from "@/shared/components/Button";
 import { Modal } from "@/shared/components/Modal";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 import type { Category } from "@/features/category/types";
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
@@ -22,11 +23,6 @@ import { EntryFormModal } from "./EntryFormModal";
 type Me = {
   readonly personalLedgerId: string | null;
   readonly familyLedgerId: string | null;
-};
-
-const currentMonth = (): string => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
 type LoadState = "loading" | "ready" | "error";
@@ -42,7 +38,7 @@ export const EntriesScreen = () => {
   const [meta, setMeta] = useState<ListMeta | null>(null);
   const [listState, setListState] = useState<LoadState>("loading");
 
-  const [billingMonth, setBillingMonth] = useState(currentMonth());
+  const [billingMonth, setBillingMonth] = useState(currentBillingMonth());
   const [categoryId, setCategoryId] = useState("");
   const [page, setPage] = useState(1);
 
