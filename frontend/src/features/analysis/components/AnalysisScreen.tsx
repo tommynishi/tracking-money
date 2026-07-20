@@ -92,7 +92,7 @@ const InsightCard = ({ ledgerId, type, month }: { ledgerId: string; type: string
       {state === "loading" ? (
         <div className="mt-2 h-4 w-3/4 animate-pulse rounded bg-background" />
       ) : state === "error" || insight === null ? (
-        <p className="mt-2 text-sm text-muted">AI所見を取得できませんでした。</p>
+        <p className="mt-2 text-sm text-muted">AI所見は現在ご利用いただけません（OpenAI未設定）。</p>
       ) : (
         <>
           <p className="mt-2 text-sm text-foreground">{insight.insight.summary}</p>

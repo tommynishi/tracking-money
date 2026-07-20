@@ -57,6 +57,15 @@ describe("createOpenAiClassifier", () => {
     await expect(classifier.classify(["店A"], ["食費"])).rejects.toThrow("件数");
   });
 
+  it("OPENAI_API_KEY未設定は throw する（fetchは呼ばない）", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.resetModules();
+    const { createOpenAiClassifier: createFresh } = await import("./openaiClassifier");
+    const classifier = createFresh();
+    await expect(classifier.classify(["店A"], ["食費"])).rejects.toThrow("未設定");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
   it("50件を超える摘要はバッチ分割して問い合わせる", async () => {
     const first = Array.from({ length: 50 }, () => "食費");
     vi.mocked(fetch)

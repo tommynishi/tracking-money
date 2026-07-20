@@ -84,6 +84,9 @@ const classifyBatch = async (
 export const createOpenAiClassifier = (): AiCategoryClassifier => ({
   async classify(descriptions, categoryNames) {
     const { OPENAI_API_KEY } = getServerEnv();
+    if (OPENAI_API_KEY === "") {
+      throw new Error("OpenAIは未設定のため利用できません");
+    }
     const results: (string | null)[] = [];
     for (let start = 0; start < descriptions.length; start += BATCH_SIZE) {
       const batch = descriptions.slice(start, start + BATCH_SIZE);

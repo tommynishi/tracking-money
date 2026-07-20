@@ -46,6 +46,9 @@ const buildPrompt = (input: InsightInput): string =>
 /** OpenAI を呼び出し所見を生成する。失敗時は AiUnavailableError（FR-AI-11）。 */
 export const generateInsight = async (input: InsightInput): Promise<InsightResult> => {
   const { OPENAI_API_KEY } = getServerEnv();
+  if (OPENAI_API_KEY === "") {
+    throw new AiUnavailableError("AI所見は未設定のため利用できません");
+  }
   let response: Response;
   try {
     response = await fetch(OPENAI_URL, {
