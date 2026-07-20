@@ -1,8 +1,8 @@
 /**
  * 取込ファイルの解析（api.md 7.1・architecture.md 7.1）。
- * フォーマット判定 → パース → カテゴリ判定（ルール優先→AI）→ 重複候補検知 →
+ * フォーマット判定 → パース／OCR → カテゴリ判定（ルール優先→AI）→ 重複候補検知 →
  * 原本を Drive へ保存 → import_files を analyzed で作成し、プレビューを返す。
- * PDF（OCR・2-9）は parsePdf 依存が未配線の間は受け付けない。
+ * PDF は OCR（pdfOcr）で解析し、失敗時は failed で記録して 502 を返す（FR-PDF-03）。
  */
 import { ConflictError, ValidationError } from "@/shared/errors/appError";
 
@@ -29,6 +29,7 @@ import { detectStatementFormat, getStatementParser } from "./parsers";
 import { parseGenericCsv } from "./parsers/genericParser";
 import { saveOriginalToDrive } from "./drive/driveService";
 import type { DriveClient } from "./drive/driveClient";
+import type { PdfStatementOcr } from "./ocr/pdfStatementOcr";
 
 export type AnalyzeImportDeps = {
   readonly entryRepository: Pick<EntryRepository, "listDuplicateKeys">;
@@ -39,6 +40,7 @@ export type AnalyzeImportDeps = {
   readonly mappingRepository: Pick<CsvColumnMappingRepository, "getById">;
   readonly drive: DriveClient;
   readonly folderRepository: LedgerDriveFolderRepository;
+  readonly pdfOcr: PdfStatementOcr;
 };
 
 export type AnalyzeImportInput = {
@@ -137,10 +139,7 @@ export const analyzeImport = async (
   deps: AnalyzeImportDeps,
   input: AnalyzeImportInput,
 ): Promise<AnalyzeImportResult> => {
-  if (isPdfFile(input.fileName)) {
-    throw new ValidationError("PDF取込は現在準備中です（CSVをご利用ください）");
-  }
-
+  const isPdf = isPdfFile(input.fileName);
   const fileHash = computeFileHash(input.bytes);
   if (!input.force) {
     const alreadyImported = await deps.importFileRepository.existsActiveByFileHash(
@@ -154,9 +153,35 @@ export const analyzeImport = async (
     }
   }
 
-  const { text } = decodeCsvBytes(input.bytes);
-  const records = parseCsv(text);
-  const { format, result } = await parseByFormat(deps, input, records);
+  let format: StatementFormat;
+  let result: ParseResult;
+  let records: readonly (readonly string[])[] = [];
+  if (isPdf) {
+    format = "pdf";
+    try {
+      result = await deps.pdfOcr.parse(input.bytes, input.fileName);
+    } catch (error) {
+      // OCR失敗も取込済み警告の対象外として履歴に残す（api.md 7.1・FR-PDF-03）
+      await deps.importFileRepository.create({
+        ledgerId: input.ledgerId,
+        uploadedByUserId: input.userId,
+        fileName: input.fileName,
+        fileType: "pdf",
+        fileHash,
+        format: "pdf",
+        status: "failed",
+        errorDetail: null,
+        driveFileId: null,
+        driveWebViewLink: null,
+        driveStatus: "failed",
+      });
+      throw error;
+    }
+  } else {
+    const { text } = decodeCsvBytes(input.bytes);
+    records = parseCsv(text);
+    ({ format, result } = await parseByFormat(deps, input, records));
+  }
 
   const previewRows = await markDuplicateRows(deps.entryRepository, input.ledgerId, result.rows);
   const categories: Category[] = await deps.categoryRepository.listByLedger(input.ledgerId);
@@ -172,7 +197,7 @@ export const analyzeImport = async (
     {
       ledgerId: input.ledgerId,
       fileName: input.fileName,
-      mimeType: "text/csv",
+      mimeType: isPdf ? "application/pdf" : "text/csv",
       bytes: input.bytes,
     },
   );
@@ -182,7 +207,7 @@ export const analyzeImport = async (
     ledgerId: input.ledgerId,
     uploadedByUserId: input.userId,
     fileName: input.fileName,
-    fileType: "csv",
+    fileType: isPdf ? "pdf" : "csv",
     fileHash,
     format,
     status: "analyzed",

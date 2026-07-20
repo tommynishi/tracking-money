@@ -18,6 +18,7 @@ import { createLedgerDriveFolderRepository } from "@/features/import/repositorie
 import { analyzeImport } from "@/features/import/services/analyzeImport";
 import { createDriveClient } from "@/features/import/services/drive/driveClient";
 import { createOpenAiClassifier } from "@/features/import/services/openaiClassifier";
+import { createPdfStatementOcr } from "@/features/import/services/ocr/pdfStatementOcr";
 
 const paramsSchema = z.object({ ledgerId: z.uuid() });
 
@@ -81,6 +82,7 @@ export async function POST(
         mappingRepository: createCsvColumnMappingRepository(client),
         drive: createDriveClient(),
         folderRepository: createLedgerDriveFolderRepository(client),
+        pdfOcr: createPdfStatementOcr(),
       },
       {
         ledgerId,

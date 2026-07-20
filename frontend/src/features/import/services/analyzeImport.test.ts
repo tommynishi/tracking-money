@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ConflictError, ValidationError } from "@/shared/errors/appError";
+import { AiUnavailableError, ConflictError, ValidationError } from "@/shared/errors/appError";
 
 import type { Category } from "@/features/category/types";
 
@@ -49,6 +49,12 @@ const createDeps = (): AnalyzeImportDeps => ({
   folderRepository: {
     getDriveFolderId: vi.fn().mockResolvedValue("folder-1"),
     setDriveFolderId: vi.fn(),
+  },
+  pdfOcr: {
+    parse: vi.fn().mockResolvedValue({
+      rows: [{ rowNumber: 1, usedOn: "2026-06-10", amount: 2200, description: "PDF店A" }],
+      errors: [],
+    }),
   },
 });
 
@@ -134,11 +140,27 @@ describe("analyzeImport", () => {
     ).rejects.toThrow("mapping または mappingId");
   });
 
-  it("PDF は準備中エラー（2-9 で対応）", async () => {
+  it("PDF は OCR で解析し format=pdf の analyzed を作成する（FR-PDF-01）", async () => {
     const deps = createDeps();
+    const result = await analyzeImport(deps, { ...baseInput, fileName: "meisai.pdf" });
+
+    expect(result.format).toBe("pdf");
+    expect(result.rows[0]).toMatchObject({ usedOn: "2026-06-10", amount: 2200 });
+    expect(deps.importFileRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ fileType: "pdf", format: "pdf", status: "analyzed" }),
+    );
+  });
+
+  it("OCR失敗は failed で記録して例外を投げる（api.md 7.1・FR-PDF-03）", async () => {
+    const deps = createDeps();
+    vi.mocked(deps.pdfOcr.parse).mockRejectedValue(new AiUnavailableError("AI down"));
+
     await expect(
       analyzeImport(deps, { ...baseInput, fileName: "meisai.pdf" }),
-    ).rejects.toThrow("PDF取込は現在準備中");
+    ).rejects.toThrow(AiUnavailableError);
+    expect(deps.importFileRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ fileType: "pdf", status: "failed" }),
+    );
   });
 
   it("Drive保存に失敗しても解析は成功し drive_status=failed で記録する（FR-DRIVE-06）", async () => {
