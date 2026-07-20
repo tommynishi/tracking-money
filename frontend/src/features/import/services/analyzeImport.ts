@@ -52,11 +52,15 @@ export type AnalyzeImportInput = {
   readonly mappingId?: string;
   readonly inlineMapping?: unknown;
   readonly force: boolean;
+  /** 支払月（YYYY-MM）。取込全体（＝1回の請求書）の既定値として全行へ適用する。 */
+  readonly billingMonth: string;
 };
 
 export type AnalyzePreviewRow = {
   readonly rowNo: number;
   readonly usedOn: string;
+  /** 支払月の既定値（billingMonth と同じ）。プレビューで行ごとに上書き可能。 */
+  readonly billingMonth: string;
   readonly amount: number;
   readonly description: string;
   readonly suggestedCategoryId: string;
@@ -224,6 +228,7 @@ export const analyzeImport = async (
     rows: categorized.map((row) => ({
       rowNo: row.rowNumber,
       usedOn: row.usedOn,
+      billingMonth: input.billingMonth,
       amount: row.amount,
       description: row.description,
       suggestedCategoryId: row.categoryId,

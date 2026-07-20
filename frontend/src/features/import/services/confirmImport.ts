@@ -23,9 +23,11 @@ export type ConfirmImportDeps = {
 
 export type ConfirmRowInput = {
   readonly usedOn: string;
+  readonly billingMonth: string;
   readonly amount: number;
   readonly description: string;
   readonly categoryId: string;
+  readonly memo: string | null;
   readonly skip: boolean;
 };
 
@@ -89,11 +91,12 @@ export const confirmImport = async (
         ledgerId: input.ledgerId,
         categoryId: row.categoryId,
         usedOn: row.usedOn,
+        billingMonth: row.billingMonth,
         amount: row.amount,
         description: row.description,
         normalizedDescription: normalizeDescription(row.description),
         paymentMethod: null,
-        memo: null,
+        memo: row.memo,
         source,
         importFileId: input.importFileId,
         createdByUserId: input.userId,

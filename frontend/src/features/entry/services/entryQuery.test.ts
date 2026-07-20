@@ -2,42 +2,23 @@ import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@/shared/errors/appError";
 
-import { resolveDateRange, toRange, toTotalPages } from "./entryQuery";
+import { assertBillingMonthFormat, toRange, toTotalPages } from "./entryQuery";
 
-describe("resolveDateRange", () => {
-  it("month 指定でその月の初日〜末日を返す（うるう年）", () => {
-    expect(resolveDateRange({ month: "2024-02" })).toEqual({
-      from: "2024-02-01",
-      to: "2024-02-29",
-    });
+describe("assertBillingMonthFormat", () => {
+  it("YYYY-MM（01〜12月）は許可する", () => {
+    expect(() => assertBillingMonthFormat("2026-07")).not.toThrow();
+    expect(() => assertBillingMonthFormat("2026-01")).not.toThrow();
+    expect(() => assertBillingMonthFormat("2026-12")).not.toThrow();
   });
 
-  it("month 指定で末日を正しく算出する（30日・31日）", () => {
-    expect(resolveDateRange({ month: "2026-04" })).toEqual({
-      from: "2026-04-01",
-      to: "2026-04-30",
-    });
-    expect(resolveDateRange({ month: "2026-07" })).toEqual({
-      from: "2026-07-01",
-      to: "2026-07-31",
-    });
+  it("値域が不正なら ValidationError（00月・13月）", () => {
+    expect(() => assertBillingMonthFormat("2026-00")).toThrow(ValidationError);
+    expect(() => assertBillingMonthFormat("2026-13")).toThrow(ValidationError);
   });
 
-  it("month 未指定なら from/to をそのまま返す", () => {
-    expect(resolveDateRange({ from: "2026-07-01", to: "2026-07-15" })).toEqual({
-      from: "2026-07-01",
-      to: "2026-07-15",
-    });
-  });
-
-  it("month の値域が不正なら ValidationError（00月・13月）", () => {
-    expect(() => resolveDateRange({ month: "2026-00" })).toThrow(ValidationError);
-    expect(() => resolveDateRange({ month: "2026-13" })).toThrow(ValidationError);
-  });
-
-  it("month の書式が不正なら ValidationError", () => {
-    expect(() => resolveDateRange({ month: "2026-7" })).toThrow(ValidationError);
-    expect(() => resolveDateRange({ month: "202607" })).toThrow(ValidationError);
+  it("書式が不正なら ValidationError", () => {
+    expect(() => assertBillingMonthFormat("2026-7")).toThrow(ValidationError);
+    expect(() => assertBillingMonthFormat("202607")).toThrow(ValidationError);
   });
 });
 

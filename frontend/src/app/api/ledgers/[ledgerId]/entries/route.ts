@@ -1,7 +1,6 @@
 /** 明細API（api.md 6.1 / 6.2）。GET: 一覧（絞り込み・ソート・ページング）。POST: 手入力登録。 */
 import { z } from "zod";
 
-import { ValidationError } from "@/shared/errors/appError";
 import { handleApiError, jsonData } from "@/shared/api/response";
 import { requireUserId } from "@/shared/api/session";
 import { getSupabaseServerClient } from "@/shared/lib/supabaseServer";
@@ -23,13 +22,19 @@ const isCalendarDate = (value: string): boolean => {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 };
 
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 const usedOnSchema = z
   .string()
   .regex(DATE_PATTERN, "YYYY-MM-DD 形式で入力してください")
   .refine(isCalendarDate, "存在する日付を指定してください");
 
+const billingMonthSchema = z.string().regex(MONTH_PATTERN, "YYYY-MM 形式で入力してください");
+
 const listQuerySchema = z.object({
-  month: z.string().optional(),
+  // 支払月（billing_month の完全一致。既定の絞り込み軸）
+  billingMonth: billingMonthSchema.optional(),
+  // 利用日の範囲絞り込み（支払月と併用可）
   from: usedOnSchema.optional(),
   to: usedOnSchema.optional(),
   categoryId: z.uuid().optional(),
@@ -45,6 +50,8 @@ const listQuerySchema = z.object({
 
 const createBodySchema = z.object({
   usedOn: usedOnSchema,
+  // 支払月。未指定なら利用日と同じ月（entryService の既定値）
+  billingMonth: billingMonthSchema.optional(),
   // 円・整数。返金はマイナス値（api.md 1.1）
   amount: z.number().int("金額は整数で入力してください"),
   description: z.string().trim().min(1, "摘要を入力してください").max(200),
@@ -61,15 +68,12 @@ export async function GET(
     const userId = await requireUserId();
     const { ledgerId } = paramsSchema.parse(await context.params);
     const query = listQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
-    if (query.month !== undefined && (query.from !== undefined || query.to !== undefined)) {
-      throw new ValidationError("month と from/to は同時に指定できません");
-    }
     const client = getSupabaseServerClient();
     await assertLedgerAccess(createLedgerMemberRepository(client), userId, ledgerId);
 
     const result = await listEntries(createEntryRepository(client), ledgerId, {
       filters: {
-        month: query.month,
+        billingMonth: query.billingMonth,
         from: query.from,
         to: query.to,
         categoryId: query.categoryId,
@@ -110,6 +114,7 @@ export async function POST(
         createdByUserId: userId,
         categoryId: body.categoryId,
         usedOn: body.usedOn,
+        billingMonth: body.billingMonth,
         amount: body.amount,
         description: body.description,
         paymentMethod: body.paymentMethod,

@@ -35,6 +35,7 @@ const entry: Entry = {
   ledgerId: LEDGER_ID,
   categoryId: CATEGORY_ID,
   usedOn: "2026-07-01",
+  billingMonth: "2026-07",
   amount: 1280,
   description: "スーパーマルエツ",
   normalizedDescription: "スーパーマルエツ",
@@ -93,6 +94,24 @@ describe("createEntry", () => {
     expect(arg.source).toBe("manual");
     expect(arg.createdByUserId).toBe(USER_ID);
     expect(arg.normalizedDescription).toBe("スーパー マルエツ");
+  });
+
+  it("支払月未指定なら利用日と同じ月を既定値とする", async () => {
+    const repository = createEntryRepoStub();
+    const deps = createDeps({ entryRepository: repository });
+
+    await createEntry(deps, baseCreateInput);
+
+    expect(vi.mocked(repository.create).mock.calls[0][0].billingMonth).toBe("2026-07");
+  });
+
+  it("支払月を指定すればそのまま使う（利用日が別月でも上書きしない）", async () => {
+    const repository = createEntryRepoStub();
+    const deps = createDeps({ entryRepository: repository });
+
+    await createEntry(deps, { ...baseCreateInput, usedOn: "2026-06-23", billingMonth: "2026-07" });
+
+    expect(vi.mocked(repository.create).mock.calls[0][0].billingMonth).toBe("2026-07");
   });
 
   it("カテゴリが同一帳簿に存在しなければ ValidationError", async () => {

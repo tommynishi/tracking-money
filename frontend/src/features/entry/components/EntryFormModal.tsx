@@ -4,7 +4,7 @@
  * SCR-04 明細登録・編集モーダル（screen.md・FR-ENTRY-01/02）。
  * 登録（entry 未指定）と編集（entry 指定）を兼ねる。保存成功時は onSaved で一覧を再読込する。
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { apiFetch, isApiError } from "@/shared/api/client";
 import { Button } from "@/shared/components/Button";
@@ -17,6 +17,8 @@ import type { EntryListItem } from "../types";
 
 type FormState = {
   usedOn: string;
+  /** 支払月（YYYY-MM）。カード請求の対象月（利用日と異なる場合がある）。 */
+  billingMonth: string;
   amount: string;
   description: string;
   categoryId: string;
@@ -29,14 +31,18 @@ const toLocalDate = (date: Date): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-const buildInitialState = (categories: readonly Category[], entry?: EntryListItem): FormState => ({
-  usedOn: entry?.usedOn ?? toLocalDate(new Date()),
-  amount: entry === undefined ? "" : String(entry.amount),
-  description: entry?.description ?? "",
-  categoryId: entry?.category.id ?? categories[0]?.id ?? "",
-  paymentMethod: entry?.paymentMethod ?? "",
-  memo: entry?.memo ?? "",
-});
+const buildInitialState = (categories: readonly Category[], entry?: EntryListItem): FormState => {
+  const usedOn = entry?.usedOn ?? toLocalDate(new Date());
+  return {
+    usedOn,
+    billingMonth: entry?.billingMonth ?? usedOn.slice(0, 7),
+    amount: entry === undefined ? "" : String(entry.amount),
+    description: entry?.description ?? "",
+    categoryId: entry?.category.id ?? categories[0]?.id ?? "",
+    paymentMethod: entry?.paymentMethod ?? "",
+    memo: entry?.memo ?? "",
+  };
+};
 
 type EntryFormProps = {
   onClose: () => void;
@@ -59,9 +65,24 @@ const EntryForm = ({ onClose, onSaved, ledgerId, categories, entry }: EntryFormP
   const [form, setForm] = useState<FormState>(() => buildInitialState(categories, entry));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEdit = entry !== undefined;
+  // 支払月をユーザーが手動編集したら、以降は利用日変更に追従させない
+  const billingMonthTouched = useRef(false);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  const setUsedOn = (value: string) => {
+    setForm((current) => ({
+      ...current,
+      usedOn: value,
+      billingMonth: billingMonthTouched.current ? current.billingMonth : value.slice(0, 7),
+    }));
+  };
+
+  const setBillingMonth = (value: string) => {
+    billingMonthTouched.current = true;
+    set("billingMonth", value);
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -69,6 +90,7 @@ const EntryForm = ({ onClose, onSaved, ledgerId, categories, entry }: EntryFormP
     try {
       const payload = {
         usedOn: form.usedOn,
+        billingMonth: form.billingMonth,
         amount: Number(form.amount),
         description: form.description,
         categoryId: form.categoryId,
@@ -114,24 +136,40 @@ const EntryForm = ({ onClose, onSaved, ledgerId, categories, entry }: EntryFormP
             type="date"
             required
             value={form.usedOn}
-            onChange={(event) => set("usedOn", event.target.value)}
+            onChange={(event) => setUsedOn(event.target.value)}
             className={inputClass}
           />
         </div>
         <div>
-          <label htmlFor="entry-amount" className="block text-sm font-medium text-foreground">
-            金額（円・返金はマイナス）
+          <label htmlFor="entry-billing-month" className="block text-sm font-medium text-foreground">
+            支払月
           </label>
           <input
-            id="entry-amount"
-            type="number"
+            id="entry-billing-month"
+            type="month"
             required
-            step={1}
-            value={form.amount}
-            onChange={(event) => set("amount", event.target.value)}
+            value={form.billingMonth}
+            onChange={(event) => setBillingMonth(event.target.value)}
             className={inputClass}
           />
+          <p className="mt-1 text-xs text-muted">
+            カード請求の対象月。既定は利用日と同じ月です（例：6/23利用が7月請求なら「2026-07」）。
+          </p>
         </div>
+      </div>
+      <div>
+        <label htmlFor="entry-amount" className="block text-sm font-medium text-foreground">
+          金額（円・返金はマイナス）
+        </label>
+        <input
+          id="entry-amount"
+          type="number"
+          required
+          step={1}
+          value={form.amount}
+          onChange={(event) => set("amount", event.target.value)}
+          className={inputClass}
+        />
       </div>
       <div>
         <label htmlFor="entry-description" className="block text-sm font-medium text-foreground">

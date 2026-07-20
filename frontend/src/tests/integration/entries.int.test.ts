@@ -27,7 +27,7 @@ import {
   type TestUser,
 } from "./helpers";
 
-type EntryResponse = { id: string; amount: number; description: string };
+type EntryResponse = { id: string; amount: number; description: string; usedOn: string; billingMonth: string };
 
 describe("明細API（認可）", () => {
   let owner: TestUser;
@@ -109,7 +109,7 @@ describe("明細API（認可）", () => {
     const entry = await readData<EntryResponse>(created);
 
     const listResponse = await getEntries(
-      jsonRequest(`/api/ledgers/${ledgerId}/entries?month=2026-07`, "GET"),
+      jsonRequest(`/api/ledgers/${ledgerId}/entries?billingMonth=2026-07`, "GET"),
       routeContext({ ledgerId }),
     );
     expect(listResponse.status).toBe(200);
@@ -139,5 +139,37 @@ describe("明細API（認可）", () => {
       routeContext({ ledgerId, entryId: entry.id }),
     );
     await expectErrorCode(afterDelete, 404, "NOT_FOUND");
+  });
+
+  it("支払月は利用日と独立して登録・絞り込みできる（6/23利用→7月請求）", async () => {
+    signInAs(owner.id);
+    const created = await postEntry(
+      jsonRequest(`/api/ledgers/${ledgerId}/entries`, "POST", {
+        usedOn: "2026-06-23",
+        billingMonth: "2026-07",
+        amount: 500,
+        description: "支払月ズレテスト",
+        categoryId,
+      }),
+      routeContext({ ledgerId }),
+    );
+    expect(created.status).toBe(201);
+    const entry = await readData<EntryResponse>(created);
+    expect(entry.usedOn).toBe("2026-06-23");
+    expect(entry.billingMonth).toBe("2026-07");
+
+    const foundInBillingMonth = await getEntries(
+      jsonRequest(`/api/ledgers/${ledgerId}/entries?billingMonth=2026-07`, "GET"),
+      routeContext({ ledgerId }),
+    );
+    const foundBody = await readData<EntryResponse[]>(foundInBillingMonth);
+    expect(foundBody.some((item) => item.id === entry.id)).toBe(true);
+
+    const notFoundInJuneBillingMonth = await getEntries(
+      jsonRequest(`/api/ledgers/${ledgerId}/entries?billingMonth=2026-06`, "GET"),
+      routeContext({ ledgerId }),
+    );
+    const notFoundBody = await readData<EntryResponse[]>(notFoundInJuneBillingMonth);
+    expect(notFoundBody.some((item) => item.id === entry.id)).toBe(false);
   });
 });

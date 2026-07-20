@@ -42,7 +42,7 @@ export const EntriesScreen = () => {
   const [meta, setMeta] = useState<ListMeta | null>(null);
   const [listState, setListState] = useState<LoadState>("loading");
 
-  const [month, setMonth] = useState(currentMonth());
+  const [billingMonth, setBillingMonth] = useState(currentMonth());
   const [categoryId, setCategoryId] = useState("");
   const [page, setPage] = useState(1);
 
@@ -82,7 +82,7 @@ export const EntriesScreen = () => {
 
   const loadEntries = useCallback((): Promise<void> => {
     if (ledgerId === null) return Promise.resolve();
-    const params = new URLSearchParams({ month, page: String(page) });
+    const params = new URLSearchParams({ billingMonth, page: String(page) });
     if (categoryId !== "") params.set("categoryId", categoryId);
     return apiFetch<EntryListItem[]>(`/api/ledgers/${ledgerId}/entries?${params.toString()}`)
       .then(({ data, meta: listMeta }) => {
@@ -91,7 +91,7 @@ export const EntriesScreen = () => {
         setListState("ready");
       })
       .catch(() => setListState("error"));
-  }, [ledgerId, month, categoryId, page]);
+  }, [ledgerId, billingMonth, categoryId, page]);
 
   useEffect(() => {
     void loadEntries();
@@ -166,15 +166,15 @@ export const EntriesScreen = () => {
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-4">
         <div>
           <label htmlFor="filter-month" className="block text-xs font-medium text-muted">
-            対象月
+            支払月
           </label>
           <input
             id="filter-month"
             type="month"
-            value={month}
+            value={billingMonth}
             onChange={(event) => {
               setListState("loading");
-              setMonth(event.target.value);
+              setBillingMonth(event.target.value);
               setPage(1);
             }}
             className="mt-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
@@ -235,6 +235,7 @@ export const EntriesScreen = () => {
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted">
                   <th className="px-4 py-3 font-medium">利用日</th>
+                  <th className="px-4 py-3 font-medium">支払月</th>
                   <th className="px-4 py-3 font-medium">摘要</th>
                   <th className="px-4 py-3 font-medium">カテゴリ</th>
                   <th className="px-4 py-3 text-right font-medium">金額</th>
@@ -248,6 +249,7 @@ export const EntriesScreen = () => {
                     <td className="px-4 py-3 whitespace-nowrap text-foreground">
                       {formatDateList(entry.usedOn)}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-muted">{entry.billingMonth}</td>
                     <td className="px-4 py-3 text-foreground">{entry.description}</td>
                     <td className="px-4 py-3 text-muted">{entry.category.name}</td>
                     <td className="px-4 py-3 text-right font-medium whitespace-nowrap text-foreground">
@@ -279,6 +281,7 @@ export const EntriesScreen = () => {
                 <p className="mt-1 text-sm text-foreground">{entry.description}</p>
                 <p className="mt-1 text-xs text-muted">
                   {entry.category.name} ・ {entry.createdBy.displayName}
+                  {entry.billingMonth !== entry.usedOn.slice(0, 7) && ` ・ 支払月 ${entry.billingMonth}`}
                 </p>
                 <div className="mt-2 flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => openEdit(entry)}>

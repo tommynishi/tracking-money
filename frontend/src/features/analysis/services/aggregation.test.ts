@@ -6,6 +6,7 @@ import type { AnalysisEntry } from "../types";
 const entry = (overrides: Partial<AnalysisEntry>): AnalysisEntry => ({
   id: "entry-1",
   usedOn: "2026-07-01",
+  billingMonth: "2026-07",
   amount: 1000,
   categoryId: "cat-food",
   categoryName: "食費",

@@ -16,6 +16,7 @@ type RouteContext = { params: Promise<{ ledgerId: string; entryId: string }> };
 const paramsSchema = z.object({ ledgerId: z.uuid(), entryId: z.uuid() });
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const isCalendarDate = (value: string): boolean => {
   const [year, month, day] = value.split("-").map(Number);
@@ -29,6 +30,7 @@ const patchBodySchema = z.object({
     .regex(DATE_PATTERN, "YYYY-MM-DD 形式で入力してください")
     .refine(isCalendarDate, "存在する日付を指定してください")
     .optional(),
+  billingMonth: z.string().regex(MONTH_PATTERN, "YYYY-MM 形式で入力してください").optional(),
   amount: z.number().int("金額は整数で入力してください").optional(),
   description: z.string().trim().min(1, "摘要を入力してください").max(200).optional(),
   categoryId: z.uuid().optional(),

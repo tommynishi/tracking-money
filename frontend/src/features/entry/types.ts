@@ -13,6 +13,8 @@ export type Entry = {
   readonly categoryId: string;
   /** 利用日（YYYY-MM-DD）。 */
   readonly usedOn: string;
+  /** 支払月（YYYY-MM）。カード請求の対象月。利用日と異なる場合がある（例：6/23利用が7月請求）。 */
+  readonly billingMonth: string;
   /** 金額（日本円・整数・FR-ENTRY-07）。 */
   readonly amount: number;
   readonly description: string;
@@ -31,6 +33,7 @@ export type Entry = {
 export type EntryListItem = {
   readonly id: string;
   readonly usedOn: string;
+  readonly billingMonth: string;
   readonly amount: number;
   readonly description: string;
   readonly paymentMethod: string | null;
