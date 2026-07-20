@@ -236,6 +236,7 @@ LINE Loginで認証されたユーザー（FR-AUTH-03）。
 | ledger_id | uuid | NOT NULL | FK → ledgers.id |
 | category_id | uuid | NOT NULL | FK → categories.id |
 | used_on | date | NOT NULL | 利用日 |
+| billing_month | text | NOT NULL | 支払月（YYYY-MM）。カード請求の対象月。利用日と異なる場合がある（例：6/23利用が7月請求）。一覧の絞り込み・分析集計の基準はこちら（利用日ではない） |
 | amount | integer | NOT NULL | 金額（円・整数）。返金は負値 |
 | description | text | NOT NULL | 摘要（店名等） |
 | normalized_description | text | NOT NULL | 正規化済み摘要（全半角統一・空白除去等）。重複チェック・カテゴリ学習に使用 |
@@ -250,11 +251,13 @@ LINE Loginで認証されたユーザー（FR-AUTH-03）。
 
 | 種別 | 定義 |
 | --- | --- |
-| INDEX | (ledger_id, used_on DESC) WHERE deleted_at IS NULL（月次一覧・期間絞込用） |
+| INDEX | (ledger_id, used_on DESC) WHERE deleted_at IS NULL（利用日の期間絞込・重複チェック用） |
+| INDEX | (ledger_id, billing_month) WHERE deleted_at IS NULL（支払月の一覧絞込・分析集計用。既定の絞り込み軸） |
 | INDEX | (ledger_id, category_id, used_on) WHERE deleted_at IS NULL（カテゴリ別集計用） |
 | INDEX | (ledger_id, used_on, amount, normalized_description) WHERE deleted_at IS NULL（重複チェック用・FR-DUP-01） |
 | CHECK | source IN ('manual', 'csv', 'pdf') |
 | CHECK | type IN ('expense') ※将来 `income` 等を追加 |
+| CHECK | billing_month ~ '^\d{4}-(0[1-9]\|1[0-2])$' |
 
 ## 3.7 import_files（取込履歴）
 
@@ -268,6 +271,7 @@ CSV/PDF取込の履歴とDrive保存状態（FR-CSV-05 / FR-DRIVE-01〜06 / FR-D
 | file_type | text | NOT NULL | `csv` / `pdf`。CHECK制約 |
 | file_hash | text | NOT NULL | ファイル内容のSHA-256。取込済み警告に使用 |
 | format | text | NOT NULL | `rakuten` / `jcb` / `epos` / `saison` / `generic` / `pdf`。CHECK制約 |
+| billing_month | text | NOT NULL | 取込時に指定した支払月（YYYY-MM）。取込全体（＝1回の請求書）の既定値。行ごとの実際の支払月は entries.billing_month が正 |
 | status | text | NOT NULL | `analyzed`（解析済・確定待ち） / `completed` / `partial` / `failed`。CHECK制約 |
 | imported_count | integer | NOT NULL default 0 | 取込件数 |
 | skipped_count | integer | NOT NULL default 0 | スキップ件数（重複等） |
@@ -283,6 +287,7 @@ CSV/PDF取込の履歴とDrive保存状態（FR-CSV-05 / FR-DRIVE-01〜06 / FR-D
 | --- | --- |
 | INDEX | (ledger_id, file_hash) WHERE deleted_at IS NULL（同一ファイル警告用。強制取込を許すためUNIQUEにしない） |
 | INDEX | (ledger_id, created_at DESC) WHERE deleted_at IS NULL（取込履歴一覧用） |
+| CHECK | billing_month ~ '^\d{4}-(0[1-9]\|1[0-2])$' |
 
 ## 3.8 csv_column_mappings（汎用CSV列マッピング）
 
@@ -457,3 +462,5 @@ DB側のバックストップとしてガード関数 `assert_no_family_membersh
 | 2026-07-06 | 家族招待の承諾 RPC `accept_family_invitation` を追加（§5・マイグレーション 20260706000500・FR-INVITE-02/03） |
 | 2026-07-10 | 家族二重所属のDBバックストップ `assert_no_family_membership`（advisory lock・FML01）を追加し、`accept_family_invitation` / `create_ledger_with_defaults` へ組み込み（§5・マイグレーション 20260710000100・FR-LEDGER-05） |
 | 2026-07-10 | `reorder_categories` を unnest による単一 UPDATE へ変更（空配列で失敗しない・20260710000200）。`accept_family_invitation` の戻り値を更新後の招待行へ変更（20260710000300） |
+| 2026-07-21 | entries に billing_month（支払月）を追加（マイグレーション 20260721000100）。カード請求は利用日と異なる月にまたがることがあるため（例：6/23利用が7月請求）、利用日とは独立して保持する。一覧の絞り込み・分析集計の基準を billing_month へ変更（利用日基準から変更）。既存行は利用日の月を初期値として一括設定 |
+| 2026-07-21 | import_files に billing_month（取込時に指定した支払月）を追加（マイグレーション 20260721000200）。取込履歴一覧でどの支払月として取り込んだかを確認できるようにする |

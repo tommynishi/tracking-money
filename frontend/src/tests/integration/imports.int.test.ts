@@ -44,6 +44,7 @@ const RAKUTEN_CSV = [
 const analyzeRequest = (ledgerId: string, csv: string, extra?: Record<string, string>): Request => {
   const form = new FormData();
   form.set("file", new File([csv], "it-sample.csv", { type: "text/csv" }));
+  form.set("billingMonth", "2026-07");
   for (const [key, value] of Object.entries(extra ?? {})) {
     form.set(key, value);
   }
@@ -198,6 +199,7 @@ describe("インポートAPI（認可・基本フロー）", () => {
       format: string;
       rows: {
         usedOn: string;
+        billingMonth: string;
         amount: number;
         description: string;
         suggestedCategoryId: string;
@@ -210,15 +212,18 @@ describe("インポートAPI（認可・基本フロー）", () => {
     // OpenAI スタブ（500）のため AI 判定は行われず「その他」フォールバック
     expect(analyzed.rows[0].categorySource).toBe("none");
     expect(analyzed.rows[0].duplicate).toBeNull();
+    expect(analyzed.rows[0].billingMonth).toBe("2026-07");
 
     const importFileId = analyzed.importFileId;
     const confirmResponse = await postConfirm(
       jsonRequest(`/api/ledgers/${ledgerId}/imports/${importFileId}/confirm`, "POST", {
         rows: analyzed.rows.map((row) => ({
           usedOn: row.usedOn,
+          billingMonth: row.billingMonth,
           amount: row.amount,
           description: row.description,
           categoryId: row.suggestedCategoryId,
+          memo: "統合テスト備考",
           skip: false,
         })),
       }),

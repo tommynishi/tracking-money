@@ -12,7 +12,7 @@ import { assertLedgerAccess } from "@/features/ledger/services/authorization";
 
 import { createEntryAnalysisRepository } from "@/features/analysis/repositories/entryAnalysisRepository";
 import { getDashboard } from "@/features/analysis/services/analysisService";
-import { todayInJst } from "@/shared/utils/month";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 const paramsSchema = z.object({ ledgerId: z.uuid() });
 const querySchema = z.object({ month: z.string().optional() });
@@ -35,7 +35,7 @@ export async function GET(
         entryRepository: createEntryRepository(client),
       },
       ledgerId,
-      month ?? todayInJst().slice(0, 7),
+      month ?? currentBillingMonth(),
     );
     return jsonData(result);
   } catch (error) {

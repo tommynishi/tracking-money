@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/shared/api/client";
 import { Button } from "@/shared/components/Button";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
-import { todayInJst } from "@/shared/utils/month";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
 
@@ -38,7 +38,7 @@ type Insight = { readonly insight: { readonly summary: string } };
 
 type LoadState = "loading" | "ready" | "error";
 
-const currentMonth = (): string => todayInJst().slice(0, 7);
+const currentMonth = (): string => currentBillingMonth();
 
 /** 前月比・前年同月比の増減表示（+12.3% 等）。基準が0円のときは表示しない。 */
 const diffRate = (current: number, base: number): string | null => {

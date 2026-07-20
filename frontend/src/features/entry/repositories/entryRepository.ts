@@ -7,18 +7,18 @@ import { z } from "zod";
 
 import { NotFoundError } from "@/shared/errors/appError";
 
-import { resolveDateRange, toRange, type EntryListQuery } from "../services/entryQuery";
+import { toRange, type EntryListQuery } from "../services/entryQuery";
 import type { Entry, EntryListItem, EntrySource } from "../types";
 
 const ENTRIES_TABLE = "entries";
 const ENTRY_COLUMNS =
-  "id, ledger_id, category_id, used_on, amount, description, normalized_description, " +
+  "id, ledger_id, category_id, used_on, billing_month, amount, description, normalized_description, " +
   "payment_method, memo, type, source, created_by_user_id, created_at, updated_at";
 // categories / users の埋め込みは表示情報の参照であり、明細の有効性は entries.deleted_at が正。
 // カテゴリの有効参照は削除RPC（delete_category_with_reassign）の付け替えで保証され、
 // 登録者は退会後も履歴として表示するため、埋め込み側の deleted_at では絞らない
 const ENTRY_LIST_COLUMNS =
-  "id, used_on, amount, description, payment_method, memo, source, " +
+  "id, used_on, billing_month, amount, description, payment_method, memo, source, " +
   "categories!inner(id, name), users!inner(id, display_name)";
 
 const entryRowSchema = z.object({
@@ -26,6 +26,7 @@ const entryRowSchema = z.object({
   ledger_id: z.string(),
   category_id: z.string(),
   used_on: z.string(),
+  billing_month: z.string(),
   amount: z.number(),
   description: z.string(),
   normalized_description: z.string(),
@@ -41,6 +42,7 @@ const entryRowSchema = z.object({
 const entryListRowSchema = z.object({
   id: z.string(),
   used_on: z.string(),
+  billing_month: z.string(),
   amount: z.number(),
   description: z.string(),
   payment_method: z.string().nullable(),
@@ -55,6 +57,7 @@ const toEntry = (row: z.infer<typeof entryRowSchema>): Entry => ({
   ledgerId: row.ledger_id,
   categoryId: row.category_id,
   usedOn: row.used_on,
+  billingMonth: row.billing_month,
   amount: row.amount,
   description: row.description,
   normalizedDescription: row.normalized_description,
@@ -70,6 +73,7 @@ const toEntry = (row: z.infer<typeof entryRowSchema>): Entry => ({
 const toEntryListItem = (row: z.infer<typeof entryListRowSchema>): EntryListItem => ({
   id: row.id,
   usedOn: row.used_on,
+  billingMonth: row.billing_month,
   amount: row.amount,
   description: row.description,
   paymentMethod: row.payment_method,
@@ -90,6 +94,8 @@ export type CreateEntryDbInput = {
   readonly ledgerId: string;
   readonly categoryId: string;
   readonly usedOn: string;
+  /** 支払月（YYYY-MM）。カード請求の対象月（利用日と異なる場合がある）。 */
+  readonly billingMonth: string;
   readonly amount: number;
   readonly description: string;
   readonly normalizedDescription: string;
@@ -104,6 +110,7 @@ export type CreateEntryDbInput = {
 export type UpdateEntryFields = {
   readonly categoryId?: string;
   readonly usedOn?: string;
+  readonly billingMonth?: string;
   readonly amount?: number;
   readonly description?: string;
   readonly normalizedDescription?: string;
@@ -140,6 +147,7 @@ const toInsertRow = (input: CreateEntryDbInput): Record<string, unknown> => ({
   ledger_id: input.ledgerId,
   category_id: input.categoryId,
   used_on: input.usedOn,
+  billing_month: input.billingMonth,
   amount: input.amount,
   description: input.description,
   normalized_description: input.normalizedDescription,
@@ -185,6 +193,7 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
     const patch: Record<string, string | number | null> = {};
     if (fields.categoryId !== undefined) patch.category_id = fields.categoryId;
     if (fields.usedOn !== undefined) patch.used_on = fields.usedOn;
+    if (fields.billingMonth !== undefined) patch.billing_month = fields.billingMonth;
     if (fields.amount !== undefined) patch.amount = fields.amount;
     if (fields.description !== undefined) patch.description = fields.description;
     if (fields.normalizedDescription !== undefined) {
@@ -227,7 +236,6 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
 
   async list(ledgerId, query) {
     const { filters, sort, order, page, perPage } = query;
-    const range = resolveDateRange(filters);
 
     let builder = client
       .from(ENTRIES_TABLE)
@@ -235,8 +243,11 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
       .eq("ledger_id", ledgerId)
       .is("deleted_at", null);
 
-    if (range.from !== undefined) builder = builder.gte("used_on", range.from);
-    if (range.to !== undefined) builder = builder.lte("used_on", range.to);
+    if (filters.billingMonth !== undefined) {
+      builder = builder.eq("billing_month", filters.billingMonth);
+    }
+    if (filters.from !== undefined) builder = builder.gte("used_on", filters.from);
+    if (filters.to !== undefined) builder = builder.lte("used_on", filters.to);
     if (filters.categoryId !== undefined) builder = builder.eq("category_id", filters.categoryId);
     if (filters.minAmount !== undefined) builder = builder.gte("amount", filters.minAmount);
     if (filters.maxAmount !== undefined) builder = builder.lte("amount", filters.maxAmount);

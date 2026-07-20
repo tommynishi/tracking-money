@@ -4,6 +4,7 @@
 export type AnalysisEntry = {
   readonly id: string;
   readonly usedOn: string;
+  readonly billingMonth: string;
   readonly amount: number;
   readonly categoryId: string;
   readonly categoryName: string;

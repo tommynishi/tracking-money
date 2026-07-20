@@ -28,6 +28,7 @@ const analyzedFile: ImportFile = {
   fileHash: "hash",
   format: "rakuten",
   status: "analyzed",
+  billingMonth: "2026-07",
   importedCount: 0,
   skippedCount: 0,
   errorCount: 0,
@@ -57,9 +58,11 @@ const createDeps = (): ConfirmImportDeps => ({
 
 const row = (description: string, skip = false, categoryId = "cat-food") => ({
   usedOn: "2026-06-25",
+  billingMonth: "2026-07",
   amount: 853,
   description,
   categoryId,
+  memo: null,
   skip,
 });
 
@@ -81,6 +84,8 @@ describe("confirmImport", () => {
     expect(deps.entryRepository.createMany).toHaveBeenCalledWith([
       expect.objectContaining({
         description: "スーパーA",
+        billingMonth: "2026-07",
+        memo: null,
         source: "csv",
         importFileId: "import-1",
         createdByUserId: "user-1",
@@ -93,6 +98,18 @@ describe("confirmImport", () => {
       skippedCount: 1,
       errorCount: 0,
     });
+  });
+
+  it("行ごとの支払月・備考をそのまま登録する", async () => {
+    const deps = createDeps();
+    await confirmImport(deps, {
+      ...baseInput,
+      rows: [{ ...row("スーパーA"), billingMonth: "2026-08", memo: "特売" }],
+    });
+
+    expect(deps.entryRepository.createMany).toHaveBeenCalledWith([
+      expect.objectContaining({ billingMonth: "2026-08", memo: "特売" }),
+    ]);
   });
 
   it("サーバー側の再チェックで重複した行は自動スキップする（api.md 7.2）", async () => {

@@ -64,6 +64,7 @@ const baseInput = {
   fileName: "enavi.csv",
   bytes: encode(RAKUTEN_CSV),
   force: false,
+  billingMonth: "2026-07",
 };
 
 describe("analyzeImport", () => {
@@ -77,6 +78,7 @@ describe("analyzeImport", () => {
       {
         rowNo: 2,
         usedOn: "2026-06-25",
+        billingMonth: "2026-07",
         amount: 853,
         description: "スーパーA",
         suggestedCategoryId: "cat-food",

@@ -25,11 +25,16 @@ export type CreateEntryInput = {
   readonly createdByUserId: string;
   readonly categoryId: string;
   readonly usedOn: string;
+  /** 支払月（YYYY-MM）。未指定なら利用日と同じ月とする。 */
+  readonly billingMonth?: string;
   readonly amount: number;
   readonly description: string;
   readonly paymentMethod: string | null;
   readonly memo: string | null;
 };
+
+/** 支払月の既定値（利用日と同じ月）。 */
+const defaultBillingMonth = (usedOn: string): string => usedOn.slice(0, 7);
 
 /** 明細を手入力で登録する（FR-ENTRY-01・api.md 6.2）。source は manual。 */
 export const createEntry = async (
@@ -45,6 +50,7 @@ export const createEntry = async (
     ledgerId: input.ledgerId,
     categoryId: input.categoryId,
     usedOn: input.usedOn,
+    billingMonth: input.billingMonth ?? defaultBillingMonth(input.usedOn),
     amount: input.amount,
     description: input.description,
     normalizedDescription: normalizeDescription(input.description),
@@ -72,6 +78,7 @@ export type UpdateEntryInput = {
   readonly entryId: string;
   readonly categoryId?: string;
   readonly usedOn?: string;
+  readonly billingMonth?: string;
   readonly amount?: number;
   readonly description?: string;
   readonly paymentMethod?: string | null;
@@ -95,6 +102,7 @@ export const updateEntry = async (
   const fields: {
     categoryId?: string;
     usedOn?: string;
+    billingMonth?: string;
     amount?: number;
     description?: string;
     normalizedDescription?: string;
@@ -110,6 +118,7 @@ export const updateEntry = async (
     fields.categoryId = input.categoryId;
   }
   if (input.usedOn !== undefined) fields.usedOn = input.usedOn;
+  if (input.billingMonth !== undefined) fields.billingMonth = input.billingMonth;
   if (input.amount !== undefined) fields.amount = input.amount;
   if (input.description !== undefined) {
     fields.description = input.description;

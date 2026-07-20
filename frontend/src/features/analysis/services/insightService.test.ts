@@ -11,6 +11,7 @@ import type { AnalysisEntry } from "../types";
 const entry = (overrides: Partial<AnalysisEntry>): AnalysisEntry => ({
   id: "entry-1",
   usedOn: "2026-07-01",
+  billingMonth: "2026-07",
   amount: 1000,
   categoryId: "cat-food",
   categoryName: "食費",
@@ -24,7 +25,7 @@ const categories = [
 ];
 
 const createDeps = () => ({
-  entryAnalysisRepository: { listByDateRange: vi.fn().mockResolvedValue([entry({})]) },
+  entryAnalysisRepository: { listByBillingMonths: vi.fn().mockResolvedValue([entry({})]) },
   categoryRepository: { listByLedger: vi.fn().mockResolvedValue(categories) },
   cacheRepository: { get: vi.fn().mockResolvedValue(null), upsert: vi.fn().mockResolvedValue(undefined) },
 });

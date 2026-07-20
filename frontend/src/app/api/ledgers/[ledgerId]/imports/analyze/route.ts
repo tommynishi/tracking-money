@@ -22,6 +22,8 @@ import { createPdfStatementOcr } from "@/features/import/services/ocr/pdfStateme
 
 const paramsSchema = z.object({ ledgerId: z.uuid() });
 
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 const fieldsSchema = z.object({
   format: z.enum(["rakuten", "jcb", "epos", "saison", "generic"]).optional(),
   mappingId: z.uuid().optional(),
@@ -29,6 +31,8 @@ const fieldsSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  // 支払月（取込全体＝1回の請求書の既定値。プレビューで行ごとに上書き可能）
+  billingMonth: z.string().regex(MONTH_PATTERN, "billingMonth は YYYY-MM 形式で入力してください"),
 });
 
 /** 最大ファイルサイズ（api.md 7.1） */
@@ -61,6 +65,7 @@ export async function POST(
       format: formString(form, "format"),
       mappingId: formString(form, "mappingId"),
       force: formString(form, "force") ?? "false",
+      billingMonth: formString(form, "billingMonth"),
     });
     const mappingRaw = formString(form, "mapping");
     let inlineMapping: unknown;
@@ -93,6 +98,7 @@ export async function POST(
         mappingId: fields.mappingId,
         inlineMapping,
         force: fields.force,
+        billingMonth: fields.billingMonth,
       },
     );
     return jsonData(result);

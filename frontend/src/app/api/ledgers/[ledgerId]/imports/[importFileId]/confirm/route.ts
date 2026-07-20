@@ -17,15 +17,18 @@ import { confirmImport } from "@/features/import/services/confirmImport";
 const paramsSchema = z.object({ ledgerId: z.uuid(), importFileId: z.uuid() });
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const bodySchema = z.object({
   rows: z
     .array(
       z.object({
         usedOn: z.string().regex(DATE_PATTERN, "YYYY-MM-DD 形式で指定してください"),
+        billingMonth: z.string().regex(MONTH_PATTERN, "YYYY-MM 形式で指定してください"),
         amount: z.number().int(),
         description: z.string().trim().min(1).max(200),
         categoryId: z.uuid(),
+        memo: z.string().max(500).nullable().default(null),
         skip: z.boolean().default(false),
       }),
     )

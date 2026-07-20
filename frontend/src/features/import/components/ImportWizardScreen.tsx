@@ -11,6 +11,7 @@ import { apiFetch, isApiError } from "@/shared/api/client";
 import { Button } from "@/shared/components/Button";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
+import { currentBillingMonth } from "@/shared/utils/month";
 
 import type { Category } from "@/features/category/types";
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
@@ -25,6 +26,7 @@ type SavedMapping = {
 type PreviewRow = {
   readonly rowNo: number;
   readonly usedOn: string;
+  readonly billingMonth: string;
   readonly amount: number;
   readonly description: string;
   readonly suggestedCategoryId: string;
@@ -46,7 +48,11 @@ type ConfirmResult = {
   readonly errorCount: number;
 };
 
-type EditableRow = PreviewRow & { readonly include: boolean; readonly categoryId: string };
+type EditableRow = PreviewRow & {
+  readonly include: boolean;
+  readonly categoryId: string;
+  readonly memo: string;
+};
 
 const FORMAT_OPTIONS = [
   { value: "", label: "自動判定" },
@@ -73,6 +79,7 @@ export const ImportWizardScreen = () => {
 
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
+  const [billingMonth, setBillingMonth] = useState(currentBillingMonth());
   const [format, setFormat] = useState<string>("");
   const [savedMappings, setSavedMappings] = useState<SavedMapping[]>([]);
   const [mappingId, setMappingId] = useState("");
@@ -147,6 +154,7 @@ export const ImportWizardScreen = () => {
       const form = new FormData();
       form.set("file", file);
       form.set("force", force ? "true" : "false");
+      form.set("billingMonth", billingMonth);
       if (format !== "") form.set("format", format);
       if (format === "generic") {
         if (effectiveMappingId !== "") {
@@ -166,6 +174,7 @@ export const ImportWizardScreen = () => {
           // 重複候補の既定はスキップ（FR-DUP-02）
           include: row.duplicate === null,
           categoryId: row.suggestedCategoryId,
+          memo: "",
         })),
       );
       setStep(1);
@@ -198,9 +207,11 @@ export const ImportWizardScreen = () => {
           body: JSON.stringify({
             rows: rows.map((row) => ({
               usedOn: row.usedOn,
+              billingMonth: row.billingMonth,
               amount: row.amount,
               description: row.description,
               categoryId: row.categoryId,
+              memo: row.memo.trim() === "" ? null : row.memo,
               skip: !row.include,
             })),
           }),
@@ -228,7 +239,10 @@ export const ImportWizardScreen = () => {
     setAnalyzeError(null);
   };
 
-  const updateRow = (rowNo: number, patch: Partial<Pick<EditableRow, "include" | "categoryId">>) => {
+  const updateRow = (
+    rowNo: number,
+    patch: Partial<Pick<EditableRow, "include" | "categoryId" | "billingMonth" | "memo">>,
+  ) => {
     setRows((current) => current.map((row) => (row.rowNo === rowNo ? { ...row, ...patch } : row)));
   };
 
@@ -293,6 +307,22 @@ export const ImportWizardScreen = () => {
               className="mt-1 block w-full text-sm text-foreground"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
+          </div>
+          <div>
+            <label htmlFor="import-billing-month" className="block text-sm font-medium text-foreground">
+              支払月
+            </label>
+            <input
+              id="import-billing-month"
+              type="month"
+              required
+              value={billingMonth}
+              onChange={(event) => setBillingMonth(event.target.value)}
+              className="mt-1 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            />
+            <p className="mt-1 text-xs text-muted">
+              この明細（請求書）の対象月です。全行に適用され、プレビューで行ごとに変更もできます。
+            </p>
           </div>
           <div>
             <label htmlFor="import-format" className="block text-sm font-medium text-foreground">
@@ -437,9 +467,11 @@ export const ImportWizardScreen = () => {
                 <tr>
                   <th className="px-3 py-2">取込</th>
                   <th className="px-3 py-2">利用日</th>
+                  <th className="px-3 py-2">支払月</th>
                   <th className="px-3 py-2">摘要</th>
                   <th className="px-3 py-2 text-right">金額</th>
                   <th className="px-3 py-2">カテゴリ</th>
+                  <th className="px-3 py-2">備考</th>
                   <th className="px-3 py-2">判定</th>
                 </tr>
               </thead>
@@ -455,6 +487,15 @@ export const ImportWizardScreen = () => {
                       />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{formatDateList(row.usedOn)}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="month"
+                        aria-label={`${row.description} の支払月`}
+                        value={row.billingMonth}
+                        onChange={(event) => updateRow(row.rowNo, { billingMonth: event.target.value })}
+                        className="w-32 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       {row.description}
                       {row.duplicate !== null && (
@@ -477,6 +518,16 @@ export const ImportWizardScreen = () => {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="text"
+                        aria-label={`${row.description} の備考`}
+                        maxLength={500}
+                        value={row.memo}
+                        onChange={(event) => updateRow(row.rowNo, { memo: event.target.value })}
+                        className="w-32 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                      />
                     </td>
                     <td className="px-3 py-2 text-xs text-muted">
                       {SOURCE_LABELS[row.categorySource]}
@@ -523,6 +574,27 @@ export const ImportWizardScreen = () => {
                     ))}
                   </select>
                   <span className="text-xs text-muted">{SOURCE_LABELS[row.categorySource]}</span>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    支払月
+                    <input
+                      type="month"
+                      value={row.billingMonth}
+                      onChange={(event) => updateRow(row.rowNo, { billingMonth: event.target.value })}
+                      className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                    />
+                  </label>
+                </div>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    placeholder="備考（任意）"
+                    maxLength={500}
+                    value={row.memo}
+                    onChange={(event) => updateRow(row.rowNo, { memo: event.target.value })}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                  />
                 </div>
               </li>
             ))}
