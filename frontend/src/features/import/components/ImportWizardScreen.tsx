@@ -15,8 +15,14 @@ import { currentBillingMonth } from "@/shared/utils/month";
 
 import type { Category } from "@/features/category/types";
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
+import type { LedgerMember, LedgerType } from "@/features/ledger/types";
 
-type Me = { readonly personalLedgerId: string | null; readonly familyLedgerId: string | null };
+type Me = {
+  readonly id: string;
+  readonly personalLedgerId: string | null;
+  readonly familyLedgerId: string | null;
+};
+type LedgerDetail = { readonly type: LedgerType };
 
 type SavedMapping = {
   readonly id: string;
@@ -48,16 +54,30 @@ type ConfirmResult = {
   readonly errorCount: number;
 };
 
+type SplitType = "default" | "custom" | "assigned";
+
 type EditableRow = PreviewRow & {
   readonly include: boolean;
   readonly categoryId: string;
   readonly memo: string;
+  /** 支払者・按分方法（FR-SPLIT）。家族家計簿のみ使用。 */
+  readonly paidByUserId: string;
+  readonly splitType: SplitType;
+  readonly customShares: Record<string, string>;
+  readonly assignedUserId: string;
 };
+
+const SPLIT_TYPE_OPTIONS: { value: SplitType; label: string }[] = [
+  { value: "default", label: "既定比重" },
+  { value: "custom", label: "独自比重" },
+  { value: "assigned", label: "全額計上" },
+];
 
 const FORMAT_OPTIONS = [
   { value: "", label: "自動判定" },
   { value: "rakuten", label: "楽天カード" },
   { value: "jcb", label: "JCBカード" },
+  { value: "epos", label: "エポスカード" },
   { value: "generic", label: "汎用CSV（列マッピング）" },
 ] as const;
 
@@ -71,11 +91,95 @@ const SOURCE_LABELS: Record<PreviewRow["categorySource"], string> = {
 
 const STEPS = ["ファイル選択", "プレビュー確認", "結果"] as const;
 
+/** 明細プレビュー行の支払者・按分方法の入力（家族家計簿限定・FR-SPLIT）。 */
+const SplitRowFields = ({
+  row,
+  members,
+  onChange,
+}: {
+  row: EditableRow;
+  members: readonly LedgerMember[];
+  onChange: (patch: Partial<Pick<EditableRow, "paidByUserId" | "splitType" | "customShares" | "assignedUserId">>) => void;
+}) => {
+  const selectClass =
+    "rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground";
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-1">
+        <select
+          aria-label={`${row.description} の支払者`}
+          value={row.paidByUserId}
+          onChange={(event) => onChange({ paidByUserId: event.target.value })}
+          className={selectClass}
+        >
+          {members.map((member) => (
+            <option key={member.userId} value={member.userId}>
+              {member.displayName}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={`${row.description} の按分方法`}
+          value={row.splitType}
+          onChange={(event) => onChange({ splitType: event.target.value as SplitType })}
+          className={selectClass}
+        >
+          {SPLIT_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {row.splitType === "custom" && (
+        <div className="flex flex-wrap gap-1">
+          {members.map((member) => (
+            <label key={member.userId} className="flex items-center gap-1 text-xs text-muted">
+              {member.displayName}
+              <input
+                type="number"
+                min={1}
+                value={row.customShares[member.userId] ?? ""}
+                onChange={(event) =>
+                  onChange({
+                    customShares: { ...row.customShares, [member.userId]: event.target.value },
+                  })
+                }
+                className="w-14 rounded-md border border-border bg-background px-1 py-0.5 text-sm text-foreground"
+              />
+            </label>
+          ))}
+        </div>
+      )}
+      {row.splitType === "assigned" && (
+        <select
+          aria-label={`${row.description} の計上先`}
+          value={row.assignedUserId}
+          onChange={(event) => onChange({ assignedUserId: event.target.value })}
+          className={selectClass}
+        >
+          <option value="" disabled>
+            計上先を選択
+          </option>
+          {members.map((member) => (
+            <option key={member.userId} value={member.userId}>
+              {member.displayName}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+};
+
 export const ImportWizardScreen = () => {
   const { showToast } = useToast();
   const [ledgerId, setLedgerId] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [meError, setMeError] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [ledgerType, setLedgerType] = useState<LedgerType>("personal");
+  const [members, setMembers] = useState<LedgerMember[]>([]);
 
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
@@ -103,6 +207,7 @@ export const ImportWizardScreen = () => {
   useEffect(() => {
     void apiFetch<Me>("/api/me")
       .then(({ data }) => {
+        setMeId(data.id);
         const resolved = data.personalLedgerId ?? data.familyLedgerId;
         if (resolved === null) {
           setNeedsSetup(true);
@@ -121,6 +226,23 @@ export const ImportWizardScreen = () => {
     void apiFetch<Category[]>(`/api/ledgers/${ledgerId}/categories`)
       .then(({ data }) => setCategories(data))
       .catch(() => showToast({ type: "error", message: "カテゴリの取得に失敗しました" }));
+  }, [ledgerId, showToast]);
+
+  // 按分・精算（FR-SPLIT）は家族家計簿限定。行ごとの支払者選択に使う
+  useEffect(() => {
+    if (ledgerId === null) return;
+    void apiFetch<LedgerDetail>(`/api/ledgers/${ledgerId}`)
+      .then(({ data }) => {
+        setLedgerType(data.type);
+        if (data.type === "family") {
+          return apiFetch<LedgerMember[]>(`/api/ledgers/${ledgerId}/members`).then(({ data: m }) =>
+            setMembers(m),
+          );
+        }
+        setMembers([]);
+        return undefined;
+      })
+      .catch(() => showToast({ type: "error", message: "家計簿情報の取得に失敗しました" }));
   }, [ledgerId, showToast]);
 
   const inlineMapping = useCallback(
@@ -175,6 +297,11 @@ export const ImportWizardScreen = () => {
           include: row.duplicate === null,
           categoryId: row.suggestedCategoryId,
           memo: "",
+          // 支払者・按分方法の既定値（FR-SPLIT）：支払者=取込実行者・按分方法=既定比重
+          paidByUserId: meId ?? "",
+          splitType: "default",
+          customShares: {},
+          assignedUserId: "",
         })),
       );
       setStep(1);
@@ -213,6 +340,22 @@ export const ImportWizardScreen = () => {
               categoryId: row.categoryId,
               memo: row.memo.trim() === "" ? null : row.memo,
               skip: !row.include,
+              ...(ledgerType === "family"
+                ? {
+                    paidByUserId: row.paidByUserId,
+                    splitType: row.splitType,
+                    splitShares:
+                      row.splitType === "custom"
+                        ? members
+                            .map((member) => ({
+                              userId: member.userId,
+                              weight: Number(row.customShares[member.userId] ?? ""),
+                            }))
+                            .filter((share) => share.weight > 0)
+                        : null,
+                    assignedUserId: row.splitType === "assigned" ? row.assignedUserId : null,
+                  }
+                : {}),
             })),
           }),
         },
@@ -241,7 +384,19 @@ export const ImportWizardScreen = () => {
 
   const updateRow = (
     rowNo: number,
-    patch: Partial<Pick<EditableRow, "include" | "categoryId" | "billingMonth" | "memo">>,
+    patch: Partial<
+      Pick<
+        EditableRow,
+        | "include"
+        | "categoryId"
+        | "billingMonth"
+        | "memo"
+        | "paidByUserId"
+        | "splitType"
+        | "customShares"
+        | "assignedUserId"
+      >
+    >,
   ) => {
     setRows((current) => current.map((row) => (row.rowNo === rowNo ? { ...row, ...patch } : row)));
   };
@@ -473,6 +628,7 @@ export const ImportWizardScreen = () => {
                   <th className="px-3 py-2">カテゴリ</th>
                   <th className="px-3 py-2">備考</th>
                   <th className="px-3 py-2">判定</th>
+                  {ledgerType === "family" && <th className="px-3 py-2">支払者・按分</th>}
                 </tr>
               </thead>
               <tbody>
@@ -532,6 +688,15 @@ export const ImportWizardScreen = () => {
                     <td className="px-3 py-2 text-xs text-muted">
                       {SOURCE_LABELS[row.categorySource]}
                     </td>
+                    {ledgerType === "family" && (
+                      <td className="px-3 py-2">
+                        <SplitRowFields
+                          row={row}
+                          members={members}
+                          onChange={(patch) => updateRow(row.rowNo, patch)}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -596,6 +761,15 @@ export const ImportWizardScreen = () => {
                     className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
                   />
                 </div>
+                {ledgerType === "family" && (
+                  <div className="mt-2">
+                    <SplitRowFields
+                      row={row}
+                      members={members}
+                      onChange={(patch) => updateRow(row.rowNo, patch)}
+                    />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

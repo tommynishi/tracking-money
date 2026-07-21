@@ -8,6 +8,9 @@ import { ConflictError, NotFoundError, ValidationError } from "@/shared/errors/a
 import type { CategoryRepository } from "@/features/category/repositories/categoryRepository";
 import type { EntryRepository } from "@/features/entry/repositories/entryRepository";
 import { normalizeDescription } from "@/features/entry/services/normalizeDescription";
+import { resolveSplitForCreate, type SplitInput } from "@/features/entry/services/splitInput";
+import type { LedgerMemberRepository } from "@/features/ledger/repositories/ledgerMemberRepository";
+import type { LedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
 
 import type { CategoryRuleRepository } from "../repositories/categoryRuleRepository";
 import type { ImportFileRepository } from "../repositories/importFileRepository";
@@ -19,9 +22,11 @@ export type ConfirmImportDeps = {
   readonly entryRepository: Pick<EntryRepository, "createMany" | "listDuplicateKeys">;
   readonly categoryRepository: Pick<CategoryRepository, "listByLedger">;
   readonly ruleRepository: Pick<CategoryRuleRepository, "upsert">;
+  readonly ledgerRepository: Pick<LedgerRepository, "getLedgerById">;
+  readonly memberRepository: Pick<LedgerMemberRepository, "listMembers">;
 };
 
-export type ConfirmRowInput = {
+export type ConfirmRowInput = SplitInput & {
   readonly usedOn: string;
   readonly billingMonth: string;
   readonly amount: number;
@@ -56,6 +61,15 @@ export const confirmImport = async (
     throw new ConflictError("この取込は既に確定済みです");
   }
 
+  const [ledger, members] = await Promise.all([
+    deps.ledgerRepository.getLedgerById(input.ledgerId),
+    deps.memberRepository.listMembers(input.ledgerId),
+  ]);
+  if (ledger === null) {
+    throw new NotFoundError("家計簿が見つかりません");
+  }
+  const memberIds = new Set(members.map((member) => member.userId));
+
   const categories = await deps.categoryRepository.listByLedger(input.ledgerId);
   const categoryIds = new Set(categories.map((category) => category.id));
   const unknownCategory = input.rows.find(
@@ -87,20 +101,27 @@ export const confirmImport = async (
   const source = importFile.fileType === "pdf" ? "pdf" : "csv";
   try {
     await deps.entryRepository.createMany(
-      toImport.map((row) => ({
-        ledgerId: input.ledgerId,
-        categoryId: row.categoryId,
-        usedOn: row.usedOn,
-        billingMonth: row.billingMonth,
-        amount: row.amount,
-        description: row.description,
-        normalizedDescription: normalizeDescription(row.description),
-        paymentMethod: null,
-        memo: row.memo,
-        source,
-        importFileId: input.importFileId,
-        createdByUserId: input.userId,
-      })),
+      toImport.map((row) => {
+        const split = resolveSplitForCreate(ledger.type, memberIds, input.userId, row);
+        return {
+          ledgerId: input.ledgerId,
+          categoryId: row.categoryId,
+          usedOn: row.usedOn,
+          billingMonth: row.billingMonth,
+          amount: row.amount,
+          description: row.description,
+          normalizedDescription: normalizeDescription(row.description),
+          paymentMethod: null,
+          memo: row.memo,
+          source,
+          importFileId: input.importFileId,
+          createdByUserId: input.userId,
+          paidByUserId: split.paidByUserId,
+          splitType: split.splitType,
+          splitShares: split.splitShares,
+          assignedUserId: split.assignedUserId,
+        };
+      }),
     );
     importedCount = toImport.length;
   } catch {

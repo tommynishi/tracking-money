@@ -4,12 +4,13 @@
  */
 import type { StatementFormat } from "../../types";
 
+import { eposParser } from "./eposParser";
 import { jcbParser } from "./jcbParser";
 import { rakutenParser } from "./rakutenParser";
 import type { StatementParser } from "./statementParser";
 
 /** 対応済みのカード会社パーサー（判定は登録順に試行する）。 */
-export const statementParsers: readonly StatementParser[] = [rakutenParser, jcbParser];
+export const statementParsers: readonly StatementParser[] = [rakutenParser, jcbParser, eposParser];
 
 /** レコード内容からフォーマットを自動判定する。判定不能は null（ユーザー選択へ委ねる）。 */
 export const detectStatementFormat = (

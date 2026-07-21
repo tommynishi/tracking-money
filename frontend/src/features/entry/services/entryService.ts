@@ -6,21 +6,47 @@
 import { NotFoundError, ValidationError } from "@/shared/errors/appError";
 
 import type { CategoryRepository } from "@/features/category/repositories/categoryRepository";
+import type { LedgerMemberRepository } from "@/features/ledger/repositories/ledgerMemberRepository";
+import type { LedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
 
 import type { EntryRepository } from "../repositories/entryRepository";
-import type { Entry, EntryListItem } from "../types";
+import type { Entry, EntryListItem, SplitShare, SplitType } from "../types";
 import { type EntryListQuery, toTotalPages } from "./entryQuery";
 import { normalizeDescription } from "./normalizeDescription";
+import {
+  assertValidPaidBy,
+  resolveSplitForCreate,
+  resolveSplitForUpdate,
+  type SplitInput,
+} from "./splitInput";
 
 export type EntryServiceDeps = {
   readonly entryRepository: EntryRepository;
   readonly categoryRepository: Pick<CategoryRepository, "getById">;
+  readonly ledgerRepository: Pick<LedgerRepository, "getLedgerById">;
+  readonly memberRepository: Pick<LedgerMemberRepository, "listMembers">;
 };
 
 const INVALID_CATEGORY_MESSAGE = "カテゴリが不正です";
 const ENTRY_NOT_FOUND_MESSAGE = "明細が見つかりません";
+const LEDGER_NOT_FOUND_MESSAGE = "家計簿が見つかりません";
 
-export type CreateEntryInput = {
+/** 家計簿の type とメンバーIDの集合を取得する（按分入力の検証に使う）。 */
+const loadLedgerContext = async (
+  deps: Pick<EntryServiceDeps, "ledgerRepository" | "memberRepository">,
+  ledgerId: string,
+): Promise<{ type: "personal" | "family"; memberIds: ReadonlySet<string> }> => {
+  const [ledger, members] = await Promise.all([
+    deps.ledgerRepository.getLedgerById(ledgerId),
+    deps.memberRepository.listMembers(ledgerId),
+  ]);
+  if (ledger === null) {
+    throw new NotFoundError(LEDGER_NOT_FOUND_MESSAGE);
+  }
+  return { type: ledger.type, memberIds: new Set(members.map((member) => member.userId)) };
+};
+
+export type CreateEntryInput = SplitInput & {
   readonly ledgerId: string;
   readonly createdByUserId: string;
   readonly categoryId: string;
@@ -46,6 +72,14 @@ export const createEntry = async (
     throw new ValidationError(INVALID_CATEGORY_MESSAGE);
   }
 
+  const ledgerContext = await loadLedgerContext(deps, input.ledgerId);
+  const split = resolveSplitForCreate(
+    ledgerContext.type,
+    ledgerContext.memberIds,
+    input.createdByUserId,
+    input,
+  );
+
   return deps.entryRepository.create({
     ledgerId: input.ledgerId,
     categoryId: input.categoryId,
@@ -58,6 +92,10 @@ export const createEntry = async (
     memo: input.memo,
     source: "manual",
     createdByUserId: input.createdByUserId,
+    paidByUserId: split.paidByUserId,
+    splitType: split.splitType,
+    splitShares: split.splitShares,
+    assignedUserId: split.assignedUserId,
   });
 };
 
@@ -73,7 +111,7 @@ export const getEntry = async (
   return entry;
 };
 
-export type UpdateEntryInput = {
+export type UpdateEntryInput = SplitInput & {
   readonly ledgerId: string;
   readonly entryId: string;
   readonly categoryId?: string;
@@ -108,6 +146,8 @@ export const updateEntry = async (
     normalizedDescription?: string;
     paymentMethod?: string | null;
     memo?: string | null;
+    paidByUserId?: string;
+    split?: { splitType: SplitType; splitShares: readonly SplitShare[] | null; assignedUserId: string | null };
   } = {};
 
   if (input.categoryId !== undefined && input.categoryId !== entry.categoryId) {
@@ -126,6 +166,24 @@ export const updateEntry = async (
   }
   if (input.paymentMethod !== undefined) fields.paymentMethod = input.paymentMethod;
   if (input.memo !== undefined) fields.memo = input.memo;
+
+  const touchesSplit =
+    input.paidByUserId !== undefined ||
+    input.splitType !== undefined ||
+    input.splitShares !== undefined ||
+    input.assignedUserId !== undefined;
+
+  if (touchesSplit) {
+    const ledgerContext = await loadLedgerContext(deps, input.ledgerId);
+    if (input.paidByUserId !== undefined) {
+      assertValidPaidBy(ledgerContext.memberIds, input.paidByUserId);
+      fields.paidByUserId = input.paidByUserId;
+    }
+    const split = resolveSplitForUpdate(ledgerContext.type, ledgerContext.memberIds, input);
+    if (split !== null) {
+      fields.split = split;
+    }
+  }
 
   if (Object.keys(fields).length === 0) {
     return entry;

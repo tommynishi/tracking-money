@@ -9,6 +9,7 @@ import { createCategoryRepository } from "@/features/category/repositories/categ
 import { createEntryRepository } from "@/features/entry/repositories/entryRepository";
 import { deleteEntry, getEntry, updateEntry } from "@/features/entry/services/entryService";
 import { createLedgerMemberRepository } from "@/features/ledger/repositories/ledgerMemberRepository";
+import { createLedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
 import { assertLedgerAccess } from "@/features/ledger/services/authorization";
 
 type RouteContext = { params: Promise<{ ledgerId: string; entryId: string }> };
@@ -24,6 +25,11 @@ const isCalendarDate = (value: string): boolean => {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 };
 
+const splitShareSchema = z.object({
+  userId: z.uuid(),
+  weight: z.number().int().positive("比重は正の整数で入力してください"),
+});
+
 const patchBodySchema = z.object({
   usedOn: z
     .string()
@@ -36,6 +42,11 @@ const patchBodySchema = z.object({
   categoryId: z.uuid().optional(),
   paymentMethod: z.string().trim().max(50).nullable().optional(),
   memo: z.string().max(500).nullable().optional(),
+  // 家族家計簿の按分・精算用（FR-SPLIT）。個人家計簿での指定は Service 層で 400 とする
+  paidByUserId: z.uuid().optional(),
+  splitType: z.enum(["default", "custom", "assigned"]).optional(),
+  splitShares: z.array(splitShareSchema).nullable().optional(),
+  assignedUserId: z.uuid().nullable().optional(),
 });
 
 export async function GET(_request: Request, context: RouteContext): Promise<Response> {
@@ -64,6 +75,8 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Re
       {
         entryRepository: createEntryRepository(client),
         categoryRepository: createCategoryRepository(client),
+        ledgerRepository: createLedgerRepository(client),
+        memberRepository: createLedgerMemberRepository(client),
       },
       { ledgerId, entryId, ...body },
     );

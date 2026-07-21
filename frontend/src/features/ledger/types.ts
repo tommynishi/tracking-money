@@ -14,6 +14,8 @@ export type LedgerMember = {
   readonly avatarUrl: string | null;
   /** 参加日時（ledger_members.created_at）。 */
   readonly joinedAt: string;
+  /** 既定按分比重（正の重み・FR-SPLIT-01）。個人家計簿では常に1（未使用）。 */
+  readonly weight: number;
 };
 
 /** 家計簿（ledgers）のドメイン表現。 */

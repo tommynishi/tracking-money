@@ -41,7 +41,25 @@ type SubscriptionCandidate = {
 };
 type Insight = { readonly generatedAt: string; readonly insight: { readonly summary: string; readonly points: string[] } };
 
-type Tab = "summary" | "trend" | "ranking" | "fixed_cost" | "subscriptions" | "advice";
+type LedgerDetail = { readonly type: "personal" | "family" };
+
+type SettlementMemberResult = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly weight: number;
+  readonly fairShareAmount: number;
+  readonly paidAmount: number;
+  readonly balance: number;
+};
+type SettlementTransfer = { readonly fromUserId: string; readonly toUserId: string; readonly amount: number };
+type Settlement = {
+  readonly billingMonth: string;
+  readonly members: SettlementMemberResult[];
+  readonly transfers: SettlementTransfer[];
+  readonly excludedEntryCount: number;
+};
+
+type Tab = "summary" | "trend" | "ranking" | "fixed_cost" | "subscriptions" | "advice" | "settlement";
 
 const TABS: { readonly key: Tab; readonly label: string }[] = [
   { key: "summary", label: "月次サマリー" },
@@ -151,6 +169,7 @@ const TrendChart = ({ points }: { points: TrendPoint[] }) => {
 
 export const AnalysisScreen = () => {
   const [ledgerId, setLedgerId] = useState<string | null>(null);
+  const [ledgerType, setLedgerType] = useState<"personal" | "family">("personal");
   const [meState, setMeState] = useState<LoadState>("loading");
   const [needsSetup, setNeedsSetup] = useState(false);
   const [month, setMonth] = useState(currentMonth());
@@ -169,6 +188,16 @@ export const AnalysisScreen = () => {
       })
       .catch(() => setMeState("error"));
   }, []);
+
+  // 精算タブ（FR-SPLIT）は家族家計簿のときのみ表示する
+  useEffect(() => {
+    if (ledgerId === null) return;
+    apiFetch<LedgerDetail>(`/api/ledgers/${ledgerId}`)
+      .then(({ data }) => setLedgerType(data.type))
+      .catch(() => undefined);
+  }, [ledgerId]);
+
+  const tabs = ledgerType === "family" ? [...TABS, { key: "settlement" as const, label: "精算" }] : TABS;
 
   if (meState === "loading") {
     return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
@@ -204,7 +233,7 @@ export const AnalysisScreen = () => {
       </div>
 
       <div role="tablist" aria-label="分析タブ" className="flex flex-wrap gap-2 border-b border-border pb-2">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             role="tab"
@@ -234,6 +263,7 @@ export const AnalysisScreen = () => {
           <InsightCard ledgerId={ledgerId} type="forecast" month={month} />
         </div>
       )}
+      {tab === "settlement" && <SettlementTab ledgerId={ledgerId} month={month} />}
     </section>
   );
 };
@@ -387,6 +417,98 @@ const RankingTab = ({ ledgerId, month }: { ledgerId: string; month: string }) =>
         </li>
       ))}
     </ol>
+  );
+};
+
+/** 精算タブ（SCR-11・FR-SPLIT-05）。家族家計簿限定・都度計算（キャッシュなし）。 */
+const SettlementTab = ({ ledgerId, month }: { ledgerId: string; month: string }) => {
+  const [state, setState] = useState<LoadState>("loading");
+  const [settlement, setSettlement] = useState<Settlement | null>(null);
+
+  const fetchSettlement = useCallback(
+    (): Promise<void> =>
+      apiFetch<Settlement>(`/api/ledgers/${ledgerId}/split/settlement?billingMonth=${month}`)
+        .then(({ data }) => {
+          setSettlement(data);
+          setState("ready");
+        })
+        .catch(() => setState("error")),
+    [ledgerId, month],
+  );
+
+  useEffect(() => {
+    void fetchSettlement();
+  }, [fetchSettlement]);
+
+  if (state === "loading" || settlement === null) {
+    return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
+  }
+  if (state === "error") {
+    return (
+      <div className="rounded-lg border border-border bg-surface p-6 text-center">
+        <p className="text-sm text-danger">精算の計算に失敗しました。</p>
+        <Button
+          className="mt-4"
+          variant="secondary"
+          onClick={() => {
+            setState("loading");
+            void fetchSettlement();
+          }}
+        >
+          再試行
+        </Button>
+      </div>
+    );
+  }
+  if (settlement.members.length < 2) {
+    return (
+      <div className="rounded-lg border border-border bg-surface p-6 text-center">
+        <p className="text-sm text-muted">メンバーが2名以上必要です。</p>
+      </div>
+    );
+  }
+
+  const nameById = new Map(settlement.members.map((m) => [m.userId, m.displayName]));
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <h2 className="text-sm font-semibold text-foreground">メンバーごとの負担額</h2>
+        <ul className="mt-3 divide-y divide-border">
+          {settlement.members.map((member) => (
+            <li key={member.userId} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="text-foreground">{member.displayName}</span>
+              <span className="text-right text-muted">
+                本来の負担額 {formatAmount(member.fairShareAmount)} ／ 実際に支払った額{" "}
+                {formatAmount(member.paidAmount)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <h2 className="text-sm font-semibold text-foreground">精算（誰が誰にいくら）</h2>
+        {settlement.transfers.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">精算の必要はありません。</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {settlement.transfers.map((transfer, index) => (
+              <li key={index} className="text-sm text-foreground">
+                {nameById.get(transfer.fromUserId) ?? "不明"} → {nameById.get(transfer.toUserId) ?? "不明"}
+                ： {formatAmount(transfer.amount)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {settlement.excludedEntryCount > 0 && (
+        <p className="text-xs text-muted">
+          退出済みメンバーが関与する明細が{settlement.excludedEntryCount}件あり、精算対象から除外しています。
+        </p>
+      )}
+    </div>
   );
 };
 

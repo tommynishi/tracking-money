@@ -77,6 +77,7 @@ erDiagram
         uuid ledger_id FK
         uuid user_id FK
         text role "owner / member"
+        integer expense_weight "既定按分比重"
     }
     ledger_invitations {
         uuid id PK
@@ -96,9 +97,12 @@ erDiagram
         uuid ledger_id FK
         uuid category_id FK
         date used_on
+        text billing_month
         integer amount
         text description
         text source
+        uuid paid_by_user_id FK
+        text split_type "default / custom / assigned"
     }
     import_files {
         uuid id PK
@@ -174,6 +178,7 @@ LINE Loginで認証されたユーザー（FR-AUTH-03）。
 | ledger_id | uuid | NOT NULL | FK → ledgers.id |
 | user_id | uuid | NOT NULL | FK → users.id |
 | role | text | NOT NULL | `owner` / `member`。CHECK制約 |
+| expense_weight | integer | NOT NULL default 1 | 家族家計簿の既定按分比重（正の重み。例：オーナー60・メンバー40）。正規化して比率計算に使う（FR-SPLIT-01）。個人家計簿では未使用（値はデフォルトのまま無視する） |
 
 制約・Index
 
@@ -181,11 +186,13 @@ LINE Loginで認証されたユーザー（FR-AUTH-03）。
 | --- | --- |
 | UNIQUE | (ledger_id, user_id) WHERE deleted_at IS NULL |
 | INDEX | (user_id) WHERE deleted_at IS NULL（自分の所属帳簿の取得用） |
+| CHECK | expense_weight > 0 |
 
 アプリ層で担保するルール（DB制約では表現しない）
 
 * 個人家計簿のメンバーはオーナー1名のみ（FR-LEDGER-03）
 * 1ユーザーが所属できる家族家計簿は最大1つ（FR-LEDGER-05）。招待承諾時にServiceで検証する
+* expense_weight の変更はオーナーのみ（FR-SPLIT-02）。Serviceで認可チェックする
 
 ## 3.4 ledger_invitations（家族招待）
 
@@ -246,6 +253,10 @@ LINE Loginで認証されたユーザー（FR-AUTH-03）。
 | source | text | NOT NULL | 取込元 `manual` / `csv` / `pdf`（FR-ENTRY-06。CHECK制約） |
 | import_file_id | uuid | NULL | 取込ファイル。FK → import_files.id（手入力はNULL） |
 | created_by_user_id | uuid | NOT NULL | 登録者。FK → users.id（FR-ENTRY-05） |
+| paid_by_user_id | uuid | NOT NULL | 支払者（立替者）。FK → users.id（FR-SPLIT-04）。登録者と同一人物とは限らない。個人家計簿では常に本人 |
+| split_type | text | NOT NULL default 'default' | 按分方法。`default`（家計簿の既定比重）／`custom`（この明細だけの比重）／`assigned`（1人に全額計上）。CHECK制約（FR-SPLIT-03） |
+| split_shares | jsonb | NULL | `split_type = 'custom'` のときのみ使用。`[{"userId": "uuid", "weight": 60}, ...]` 形式の正の重み配列 |
+| assigned_user_id | uuid | NULL | `split_type = 'assigned'` のときのみ使用。全額を計上する対象メンバー。FK → users.id |
 
 制約・Index
 
@@ -258,6 +269,11 @@ LINE Loginで認証されたユーザー（FR-AUTH-03）。
 | CHECK | source IN ('manual', 'csv', 'pdf') |
 | CHECK | type IN ('expense') ※将来 `income` 等を追加 |
 | CHECK | billing_month ~ '^\d{4}-(0[1-9]\|1[0-2])$' |
+| CHECK | split_type IN ('default', 'custom', 'assigned') |
+| CHECK | (split_type = 'assigned') = (assigned_user_id IS NOT NULL)（assigned のときのみ必須） |
+| CHECK | (split_type = 'custom') = (split_shares IS NOT NULL)（custom のときのみ必須） |
+
+按分・精算（FR-SPLIT-05）はキャッシュを持たず、指定された支払月の entries を都度集計するJS純粋関数（analysisService と同様の方針）で計算する。`split_shares` / `ledger_members.expense_weight` の重みは正規化（合計に対する比率へ変換）してから金額按分に用いる。個人家計簿の明細は split_type = 'default' のまま無視され、精算画面自体を表示しない（FR-SPLIT）。
 
 ## 3.7 import_files（取込履歴）
 
@@ -464,3 +480,4 @@ DB側のバックストップとしてガード関数 `assert_no_family_membersh
 | 2026-07-10 | `reorder_categories` を unnest による単一 UPDATE へ変更（空配列で失敗しない・20260710000200）。`accept_family_invitation` の戻り値を更新後の招待行へ変更（20260710000300） |
 | 2026-07-21 | entries に billing_month（支払月）を追加（マイグレーション 20260721000100）。カード請求は利用日と異なる月にまたがることがあるため（例：6/23利用が7月請求）、利用日とは独立して保持する。一覧の絞り込み・分析集計の基準を billing_month へ変更（利用日基準から変更）。既存行は利用日の月を初期値として一括設定 |
 | 2026-07-21 | import_files に billing_month（取込時に指定した支払月）を追加（マイグレーション 20260721000200）。取込履歴一覧でどの支払月として取り込んだかを確認できるようにする |
+| 2026-07-21 | 家族家計簿限定の按分・精算機能（FR-SPLIT）向けにスキーマを追加（マイグレーション 20260721000300）。ledger_members に expense_weight（既定按分比重・正の整数）、entries に paid_by_user_id（支払者）・split_type（default/custom/assigned）・split_shares（jsonb・custom時の明細別比重）・assigned_user_id（assigned時の全額計上先）を追加。精算計算はキャッシュを持たず都度JS集計する方針（analysis_caches は使わない） |
