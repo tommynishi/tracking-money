@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { NotFoundError, ValidationError } from "@/shared/errors/appError";
 import type { CategoryRepository } from "@/features/category/repositories/categoryRepository";
 import type { Category } from "@/features/category/types";
+import type { LedgerMemberRepository } from "@/features/ledger/repositories/ledgerMemberRepository";
+import type { LedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
+import type { Ledger, LedgerMember } from "@/features/ledger/types";
 
 import type { EntryRepository } from "../repositories/entryRepository";
 import type { Entry } from "../types";
@@ -44,6 +47,10 @@ const entry: Entry = {
   type: "expense",
   source: "manual",
   createdByUserId: USER_ID,
+  paidByUserId: USER_ID,
+  splitType: "default",
+  splitShares: null,
+  assignedUserId: null,
   createdAt: "2026-07-01T00:00:00.000Z",
   updatedAt: "2026-07-01T00:00:00.000Z",
 };
@@ -59,16 +66,42 @@ const createEntryRepoStub = (getByIdResult: Entry | null = entry): EntryReposito
   getLastCreatedAtByUser: vi.fn(async () => null),
 });
 
+const ledger: Ledger = {
+  id: LEDGER_ID,
+  ownerUserId: USER_ID,
+  type: "personal",
+  name: "わたしの家計簿",
+  createdAt: "2026-07-01T00:00:00.000Z",
+  updatedAt: "2026-07-01T00:00:00.000Z",
+};
+
+const member: LedgerMember = {
+  userId: USER_ID,
+  role: "owner",
+  displayName: "たろう",
+  avatarUrl: null,
+  joinedAt: "2026-07-01T00:00:00.000Z",
+  weight: 1,
+};
+
 const createDeps = (
   overrides: {
     category?: Category | null;
     entryRepository?: EntryRepository;
+    ledger?: Ledger;
+    members?: LedgerMember[];
   } = {},
 ): EntryServiceDeps => ({
   entryRepository: overrides.entryRepository ?? createEntryRepoStub(),
   categoryRepository: {
     getById: vi.fn(async () => (overrides.category === undefined ? category : overrides.category)),
   } as Pick<CategoryRepository, "getById">,
+  ledgerRepository: {
+    getLedgerById: vi.fn(async () => overrides.ledger ?? ledger),
+  } as Pick<LedgerRepository, "getLedgerById">,
+  memberRepository: {
+    listMembers: vi.fn(async () => overrides.members ?? [member]),
+  } as Pick<LedgerMemberRepository, "listMembers">,
 });
 
 const baseCreateInput = {
@@ -119,6 +152,46 @@ describe("createEntry", () => {
     const deps = createDeps({ category: null, entryRepository: repository });
 
     await expect(createEntry(deps, baseCreateInput)).rejects.toBeInstanceOf(ValidationError);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it("家族家計簿では支払者・按分方法を解決して登録する（FR-SPLIT-03/04）", async () => {
+    const otherUserId = "55555555-5555-5555-5555-555555555555";
+    const familyLedger: Ledger = { ...ledger, type: "family" };
+    const otherMember: LedgerMember = { ...member, userId: otherUserId, role: "member" };
+    const repository = createEntryRepoStub();
+    const deps = createDeps({
+      entryRepository: repository,
+      ledger: familyLedger,
+      members: [member, otherMember],
+    });
+
+    await createEntry(deps, {
+      ...baseCreateInput,
+      splitType: "assigned",
+      assignedUserId: otherUserId,
+    });
+
+    const arg = vi.mocked(repository.create).mock.calls[0][0];
+    expect(arg.paidByUserId).toBe(USER_ID);
+    expect(arg.splitType).toBe("assigned");
+    expect(arg.assignedUserId).toBe(otherUserId);
+  });
+
+  it("個人家計簿で splitType=custom を指定すると ValidationError", async () => {
+    const repository = createEntryRepoStub();
+    const deps = createDeps({ entryRepository: repository });
+
+    await expect(
+      createEntry(deps, {
+        ...baseCreateInput,
+        splitType: "custom",
+        splitShares: [
+          { userId: USER_ID, weight: 50 },
+          { userId: "99999999-9999-9999-9999-999999999999", weight: 50 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
     expect(repository.create).not.toHaveBeenCalled();
   });
 });

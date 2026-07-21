@@ -55,6 +55,7 @@ erDiagram
         uuid ledger_id FK
         uuid user_id FK
         text role "owner / member"
+        integer expense_weight "既定按分比重・家族のみ使用"
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -89,6 +90,7 @@ erDiagram
         uuid ledger_id FK
         uuid category_id FK
         date used_on "利用日"
+        text billing_month "支払月 YYYY-MM"
         integer amount "円・返金は負値"
         text description "摘要"
         text normalized_description "正規化済み摘要"
@@ -97,7 +99,11 @@ erDiagram
         text type "expense（将来拡張用）"
         text source "manual / csv / pdf"
         uuid import_file_id FK "NULL可"
-        uuid created_by_user_id FK
+        uuid created_by_user_id FK "登録者"
+        uuid paid_by_user_id FK "支払者・立替者"
+        text split_type "default / custom / assigned"
+        jsonb split_shares "custom時の明細別比重・NULL可"
+        uuid assigned_user_id FK "assigned時の計上先・NULL可"
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -111,6 +117,7 @@ erDiagram
         text file_type "csv / pdf"
         text file_hash "SHA-256"
         text format "rakuten / jcb / epos / saison / generic / pdf"
+        text billing_month "取込時に指定した支払月 YYYY-MM"
         text status "analyzed / completed / partial / failed"
         integer imported_count
         integer skipped_count
@@ -185,3 +192,5 @@ erDiagram
 | --- | --- |
 | 2026-07-05 | 初版作成 |
 | 2026-07-05 | レビュー指摘反映：ledgers に drive_folder_id を追加（FR-DRIVE-02） |
+| 2026-07-21 | entries / import_files に billing_month を追加した反映漏れを修正（database.md 2026-07-21 分に追従） |
+| 2026-07-21 | 按分・精算機能（FR-SPLIT）向けに ledger_members.expense_weight、entries の paid_by_user_id / split_type / split_shares / assigned_user_id を追加（database.md 参照） |

@@ -3,8 +3,27 @@ import { describe, expect, it, vi } from "vitest";
 import { ConflictError, NotFoundError, ValidationError } from "@/shared/errors/appError";
 
 import type { Category } from "@/features/category/types";
+import type { Ledger, LedgerMember } from "@/features/ledger/types";
 
 import { confirmImport, type ConfirmImportDeps } from "./confirmImport";
+
+const ledger: Ledger = {
+  id: "ledger-1",
+  ownerUserId: "user-1",
+  type: "personal",
+  name: "わたしの家計簿",
+  createdAt: "",
+  updatedAt: "",
+};
+
+const member: LedgerMember = {
+  userId: "user-1",
+  role: "owner",
+  displayName: "たろう",
+  avatarUrl: null,
+  joinedAt: "",
+  weight: 1,
+};
 
 const category = (id: string, name: string, isSystem = false): Category => ({
   id,
@@ -54,6 +73,8 @@ const createDeps = (): ConfirmImportDeps => ({
       .mockResolvedValue([category("cat-food", "食費"), category("cat-other", "その他", true)]),
   },
   ruleRepository: { upsert: vi.fn().mockResolvedValue(undefined) },
+  ledgerRepository: { getLedgerById: vi.fn().mockResolvedValue(ledger) },
+  memberRepository: { listMembers: vi.fn().mockResolvedValue([member]) },
 });
 
 const row = (description: string, skip = false, categoryId = "cat-food") => ({

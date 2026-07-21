@@ -8,6 +8,7 @@ import { getSupabaseServerClient } from "@/shared/lib/supabaseServer";
 import { createCategoryRepository } from "@/features/category/repositories/categoryRepository";
 import { createEntryRepository } from "@/features/entry/repositories/entryRepository";
 import { createLedgerMemberRepository } from "@/features/ledger/repositories/ledgerMemberRepository";
+import { createLedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
 import { assertLedgerAccess } from "@/features/ledger/services/authorization";
 
 import { createCategoryRuleRepository } from "@/features/import/repositories/categoryRuleRepository";
@@ -18,6 +19,11 @@ const paramsSchema = z.object({ ledgerId: z.uuid(), importFileId: z.uuid() });
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+const splitShareSchema = z.object({
+  userId: z.uuid(),
+  weight: z.number().int().positive("比重は正の整数で入力してください"),
+});
 
 const bodySchema = z.object({
   rows: z
@@ -30,6 +36,11 @@ const bodySchema = z.object({
         categoryId: z.uuid(),
         memo: z.string().max(500).nullable().default(null),
         skip: z.boolean().default(false),
+        // 家族家計簿の按分・精算用（FR-SPLIT）。省略時は paidByUserId=取込実行者・splitType=default
+        paidByUserId: z.uuid().optional(),
+        splitType: z.enum(["default", "custom", "assigned"]).optional(),
+        splitShares: z.array(splitShareSchema).nullable().optional(),
+        assignedUserId: z.uuid().nullable().optional(),
       }),
     )
     .max(5000),
@@ -52,6 +63,8 @@ export async function POST(
         entryRepository: createEntryRepository(client),
         categoryRepository: createCategoryRepository(client),
         ruleRepository: createCategoryRuleRepository(client),
+        ledgerRepository: createLedgerRepository(client),
+        memberRepository: createLedgerMemberRepository(client),
       },
       { ledgerId, userId, importFileId, rows: body.rows },
     );

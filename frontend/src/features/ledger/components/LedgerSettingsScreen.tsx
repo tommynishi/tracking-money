@@ -37,6 +37,12 @@ export const LedgerSettingsScreen = () => {
   const [isDeletingLedger, setIsDeletingLedger] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [familyName, setFamilyName] = useState("");
+  const [isCreatingFamily, setIsCreatingFamily] = useState(false);
+
+  const [weightDrafts, setWeightDrafts] = useState<Record<string, number>>({});
+  const [isSavingWeights, setIsSavingWeights] = useState(false);
+
   const loadLedgers = useCallback(
     (): Promise<void> =>
       Promise.all([apiFetch<LedgerSummary[]>("/api/ledgers"), apiFetch<{ id: string }>("/api/me")])
@@ -64,6 +70,9 @@ export const LedgerSettingsScreen = () => {
         setDetail(detailResult.data);
         setName(detailResult.data.name);
         setMembers(membersResult.data);
+        setWeightDrafts(
+          Object.fromEntries(membersResult.data.map((member) => [member.userId, member.weight])),
+        );
       })
       .catch(() => setState("error"));
   }, [selectedId]);
@@ -139,6 +148,45 @@ export const LedgerSettingsScreen = () => {
     }
   };
 
+  const handleCreateFamily = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsCreatingFamily(true);
+    try {
+      const { data } = await apiFetch<{ id: string }>("/api/ledgers", {
+        method: "POST",
+        body: JSON.stringify({ type: "family", name: familyName }),
+      });
+      showToast({ type: "success", message: "家族家計簿を作成しました" });
+      setFamilyName("");
+      setSelectedId(data.id);
+      await loadLedgers();
+    } catch (error) {
+      notifyError(error, "家族家計簿の作成に失敗しました");
+    } finally {
+      setIsCreatingFamily(false);
+    }
+  };
+
+  const handleSaveWeights = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (selectedId === null) return;
+    setIsSavingWeights(true);
+    try {
+      await apiFetch(`/api/ledgers/${selectedId}/split/weights`, {
+        method: "PUT",
+        body: JSON.stringify({
+          weights: Object.entries(weightDrafts).map(([userId, weight]) => ({ userId, weight })),
+        }),
+      });
+      showToast({ type: "success", message: "按分比重を保存しました" });
+      await loadDetail();
+    } catch (error) {
+      notifyError(error, "按分比重の保存に失敗しました");
+    } finally {
+      setIsSavingWeights(false);
+    }
+  };
+
   const handleDeleteLedger = async () => {
     if (selectedId === null) return;
     setIsDeletingLedger(true);
@@ -201,6 +249,43 @@ export const LedgerSettingsScreen = () => {
         </select>
       </div>
 
+      {(() => {
+        const familyLedger = ledgers.find((ledger) => ledger.type === "family");
+        if (familyLedger !== undefined && familyLedger.role === "owner") {
+          return null;
+        }
+        return (
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <h2 className="text-sm font-semibold text-foreground">家族家計簿</h2>
+            {familyLedger === undefined ? (
+              <>
+                <p className="mt-1 text-xs text-muted">
+                  家族と共有できる家計簿を作成します。作成後、メンバーを検索して招待できます。
+                </p>
+                <form onSubmit={handleCreateFamily} className="mt-2 flex gap-2">
+                  <input
+                    aria-label="家族家計簿名"
+                    placeholder="家族家計簿名"
+                    required
+                    maxLength={50}
+                    value={familyName}
+                    onChange={(event) => setFamilyName(event.target.value)}
+                    className={`flex-1 ${inputClass}`}
+                  />
+                  <Button type="submit" isLoading={isCreatingFamily}>
+                    家族家計簿を作成
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <p className="mt-1 text-xs text-muted">
+                既に家族家計簿へ参加しているため、新たに作成することはできません（FR-INVITE-04）。
+              </p>
+            )}
+          </div>
+        );
+      })()}
+
       {detail !== null && (
         <>
           <form onSubmit={handleRename} className="rounded-lg border border-border bg-surface p-4">
@@ -250,6 +335,42 @@ export const LedgerSettingsScreen = () => {
               ))}
             </ul>
           </div>
+
+          {detail.type === "family" && isOwner && members.length >= 2 && (
+            <form
+              onSubmit={handleSaveWeights}
+              className="rounded-lg border border-border bg-surface p-4"
+            >
+              <h2 className="text-sm font-semibold text-foreground">既定按分比重</h2>
+              <p className="mt-1 text-xs text-muted">
+                精算（分析画面）で使う、メンバー間の負担割合の既定値です（正の整数・比率で計算）。
+              </p>
+              <ul className="mt-2 space-y-2">
+                {members.map((member) => (
+                  <li key={member.userId} className="flex items-center gap-3">
+                    <span className="flex-1 text-sm text-foreground">{member.displayName}</span>
+                    <input
+                      aria-label={`${member.displayName}の比重`}
+                      type="number"
+                      min={1}
+                      required
+                      value={weightDrafts[member.userId] ?? 1}
+                      onChange={(event) =>
+                        setWeightDrafts((current) => ({
+                          ...current,
+                          [member.userId]: Number(event.target.value),
+                        }))
+                      }
+                      className={`w-24 ${inputClass}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <Button type="submit" className="mt-3" isLoading={isSavingWeights}>
+                保存
+              </Button>
+            </form>
+          )}
 
           {detail.type === "family" && isOwner && (
             <div className="rounded-lg border border-border bg-surface p-4">

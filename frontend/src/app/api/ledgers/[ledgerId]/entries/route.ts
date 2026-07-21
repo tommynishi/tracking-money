@@ -9,6 +9,7 @@ import { createCategoryRepository } from "@/features/category/repositories/categ
 import { createEntryRepository } from "@/features/entry/repositories/entryRepository";
 import { createEntry, listEntries } from "@/features/entry/services/entryService";
 import { createLedgerMemberRepository } from "@/features/ledger/repositories/ledgerMemberRepository";
+import { createLedgerRepository } from "@/features/ledger/repositories/ledgerRepository";
 import { assertLedgerAccess } from "@/features/ledger/services/authorization";
 
 const paramsSchema = z.object({ ledgerId: z.uuid() });
@@ -48,6 +49,11 @@ const listQuerySchema = z.object({
   perPage: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+const splitShareSchema = z.object({
+  userId: z.uuid(),
+  weight: z.number().int().positive("比重は正の整数で入力してください"),
+});
+
 const createBodySchema = z.object({
   usedOn: usedOnSchema,
   // 支払月。未指定なら利用日と同じ月（entryService の既定値）
@@ -58,6 +64,11 @@ const createBodySchema = z.object({
   categoryId: z.uuid(),
   paymentMethod: z.string().trim().max(50).nullable().default(null),
   memo: z.string().max(500).nullable().default(null),
+  // 家族家計簿の按分・精算用（FR-SPLIT）。個人家計簿での指定は Service 層で 400 とする
+  paidByUserId: z.uuid().optional(),
+  splitType: z.enum(["default", "custom", "assigned"]).optional(),
+  splitShares: z.array(splitShareSchema).nullable().optional(),
+  assignedUserId: z.uuid().nullable().optional(),
 });
 
 export async function GET(
@@ -108,6 +119,8 @@ export async function POST(
       {
         entryRepository: createEntryRepository(client),
         categoryRepository: createCategoryRepository(client),
+        ledgerRepository: createLedgerRepository(client),
+        memberRepository: createLedgerMemberRepository(client),
       },
       {
         ledgerId,
@@ -119,6 +132,10 @@ export async function POST(
         description: body.description,
         paymentMethod: body.paymentMethod,
         memo: body.memo,
+        paidByUserId: body.paidByUserId,
+        splitType: body.splitType,
+        splitShares: body.splitShares,
+        assignedUserId: body.assignedUserId,
       },
     );
     return jsonData(entry, { status: 201 });

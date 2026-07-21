@@ -8,18 +8,25 @@ import { z } from "zod";
 import { NotFoundError } from "@/shared/errors/appError";
 
 import { toRange, type EntryListQuery } from "../services/entryQuery";
-import type { Entry, EntryListItem, EntrySource } from "../types";
+import type { Entry, EntryListItem, EntrySource, SplitShare, SplitType } from "../types";
 
 const ENTRIES_TABLE = "entries";
 const ENTRY_COLUMNS =
   "id, ledger_id, category_id, used_on, billing_month, amount, description, normalized_description, " +
-  "payment_method, memo, type, source, created_by_user_id, created_at, updated_at";
+  "payment_method, memo, type, source, created_by_user_id, paid_by_user_id, split_type, " +
+  "split_shares, assigned_user_id, created_at, updated_at";
 // categories / users の埋め込みは表示情報の参照であり、明細の有効性は entries.deleted_at が正。
 // カテゴリの有効参照は削除RPC（delete_category_with_reassign）の付け替えで保証され、
-// 登録者は退会後も履歴として表示するため、埋め込み側の deleted_at では絞らない
+// 登録者・支払者・計上先は退会後も履歴として表示するため、埋め込み側の deleted_at では絞らない。
+// users への参照が複数（created_by / paid_by / assigned）あるため FK 名で明示する（database.md 3.6）
 const ENTRY_LIST_COLUMNS =
-  "id, used_on, billing_month, amount, description, payment_method, memo, source, " +
-  "categories!inner(id, name), users!inner(id, display_name)";
+  "id, used_on, billing_month, amount, description, payment_method, memo, source, split_type, split_shares, " +
+  "categories!inner(id, name), " +
+  "created_by:users!entries_created_by_user_id_fkey!inner(id, display_name), " +
+  "paid_by:users!entries_paid_by_user_id_fkey!inner(id, display_name), " +
+  "assigned_to:users!entries_assigned_user_id_fkey(id, display_name)";
+
+const splitShareSchema = z.object({ userId: z.string(), weight: z.number() });
 
 const entryRowSchema = z.object({
   id: z.string(),
@@ -35,6 +42,10 @@ const entryRowSchema = z.object({
   type: z.enum(["expense"]),
   source: z.enum(["manual", "csv", "pdf"]),
   created_by_user_id: z.string(),
+  paid_by_user_id: z.string(),
+  split_type: z.enum(["default", "custom", "assigned"]),
+  split_shares: z.array(splitShareSchema).nullable(),
+  assigned_user_id: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -48,8 +59,12 @@ const entryListRowSchema = z.object({
   payment_method: z.string().nullable(),
   memo: z.string().nullable(),
   source: z.enum(["manual", "csv", "pdf"]),
+  split_type: z.enum(["default", "custom", "assigned"]),
+  split_shares: z.array(splitShareSchema).nullable(),
   categories: z.object({ id: z.string(), name: z.string() }),
-  users: z.object({ id: z.string(), display_name: z.string() }),
+  created_by: z.object({ id: z.string(), display_name: z.string() }),
+  paid_by: z.object({ id: z.string(), display_name: z.string() }),
+  assigned_to: z.object({ id: z.string(), display_name: z.string() }).nullable(),
 });
 
 const toEntry = (row: z.infer<typeof entryRowSchema>): Entry => ({
@@ -66,6 +81,10 @@ const toEntry = (row: z.infer<typeof entryRowSchema>): Entry => ({
   type: row.type,
   source: row.source,
   createdByUserId: row.created_by_user_id,
+  paidByUserId: row.paid_by_user_id,
+  splitType: row.split_type,
+  splitShares: row.split_shares,
+  assignedUserId: row.assigned_user_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -80,7 +99,14 @@ const toEntryListItem = (row: z.infer<typeof entryListRowSchema>): EntryListItem
   memo: row.memo,
   source: row.source,
   category: { id: row.categories.id, name: row.categories.name },
-  createdBy: { id: row.users.id, displayName: row.users.display_name },
+  createdBy: { id: row.created_by.id, displayName: row.created_by.display_name },
+  paidBy: { id: row.paid_by.id, displayName: row.paid_by.display_name },
+  splitType: row.split_type,
+  splitShares: row.split_shares,
+  assignedTo:
+    row.assigned_to === null
+      ? null
+      : { id: row.assigned_to.id, displayName: row.assigned_to.display_name },
 });
 
 /** キーワードから PostgREST フィルタ構文を壊す文字を除去する（安全化）。 */
@@ -105,6 +131,10 @@ export type CreateEntryDbInput = {
   /** 取込由来の場合の import_files.id（手入力は指定しない） */
   readonly importFileId?: string;
   readonly createdByUserId: string;
+  readonly paidByUserId: string;
+  readonly splitType: SplitType;
+  readonly splitShares: readonly SplitShare[] | null;
+  readonly assignedUserId: string | null;
 };
 
 export type UpdateEntryFields = {
@@ -116,6 +146,13 @@ export type UpdateEntryFields = {
   readonly normalizedDescription?: string;
   readonly paymentMethod?: string | null;
   readonly memo?: string | null;
+  readonly paidByUserId?: string;
+  /** splitType を指定する場合、対応する splitShares / assignedUserId も同時に渡す（entryService が解決）。 */
+  readonly split?: {
+    readonly splitType: SplitType;
+    readonly splitShares: readonly SplitShare[] | null;
+    readonly assignedUserId: string | null;
+  };
 };
 
 /** 重複チェック用の既存明細キー（FR-DUP-01・idx_entries_dup_check と対応）。 */
@@ -156,6 +193,10 @@ const toInsertRow = (input: CreateEntryDbInput): Record<string, unknown> => ({
   source: input.source,
   import_file_id: input.importFileId ?? null,
   created_by_user_id: input.createdByUserId,
+  paid_by_user_id: input.paidByUserId,
+  split_type: input.splitType,
+  split_shares: input.splitShares,
+  assigned_user_id: input.assignedUserId,
 });
 
 export const createEntryRepository = (client: SupabaseClient): EntryRepository => ({
@@ -190,7 +231,7 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
   },
 
   async updateFields(ledgerId, entryId, fields) {
-    const patch: Record<string, string | number | null> = {};
+    const patch: Record<string, unknown> = {};
     if (fields.categoryId !== undefined) patch.category_id = fields.categoryId;
     if (fields.usedOn !== undefined) patch.used_on = fields.usedOn;
     if (fields.billingMonth !== undefined) patch.billing_month = fields.billingMonth;
@@ -201,6 +242,12 @@ export const createEntryRepository = (client: SupabaseClient): EntryRepository =
     }
     if (fields.paymentMethod !== undefined) patch.payment_method = fields.paymentMethod;
     if (fields.memo !== undefined) patch.memo = fields.memo;
+    if (fields.paidByUserId !== undefined) patch.paid_by_user_id = fields.paidByUserId;
+    if (fields.split !== undefined) {
+      patch.split_type = fields.split.splitType;
+      patch.split_shares = fields.split.splitShares;
+      patch.assigned_user_id = fields.split.assignedUserId;
+    }
 
     const { data, error } = await client
       .from(ENTRIES_TABLE)

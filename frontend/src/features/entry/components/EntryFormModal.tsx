@@ -12,8 +12,9 @@ import { Modal } from "@/shared/components/Modal";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 
 import type { Category } from "@/features/category/types";
+import type { LedgerMember, LedgerType } from "@/features/ledger/types";
 
-import type { EntryListItem } from "../types";
+import type { EntryListItem, SplitType } from "../types";
 
 type FormState = {
   usedOn: string;
@@ -24,6 +25,13 @@ type FormState = {
   categoryId: string;
   paymentMethod: string;
   memo: string;
+  /** 支払者（FR-SPLIT-04）。家族家計簿のみ使用。 */
+  paidByUserId: string;
+  splitType: SplitType;
+  /** splitType="custom" のときの比重（メンバーごと、文字列入力のまま保持）。 */
+  customShares: Record<string, string>;
+  /** splitType="assigned" のときの計上先。 */
+  assignedUserId: string;
 };
 
 const toLocalDate = (date: Date): string => {
@@ -31,8 +39,19 @@ const toLocalDate = (date: Date): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-const buildInitialState = (categories: readonly Category[], entry?: EntryListItem): FormState => {
+const buildInitialState = (
+  categories: readonly Category[],
+  members: readonly LedgerMember[],
+  selfUserId: string | null,
+  entry?: EntryListItem,
+): FormState => {
   const usedOn = entry?.usedOn ?? toLocalDate(new Date());
+  const customShares = Object.fromEntries(
+    members.map((member) => {
+      const existing = entry?.splitShares?.find((share) => share.userId === member.userId);
+      return [member.userId, existing !== undefined ? String(existing.weight) : ""];
+    }),
+  );
   return {
     usedOn,
     billingMonth: entry?.billingMonth ?? usedOn.slice(0, 7),
@@ -41,6 +60,10 @@ const buildInitialState = (categories: readonly Category[], entry?: EntryListIte
     categoryId: entry?.category.id ?? categories[0]?.id ?? "",
     paymentMethod: entry?.paymentMethod ?? "",
     memo: entry?.memo ?? "",
+    paidByUserId: entry?.paidBy.id ?? selfUserId ?? members[0]?.userId ?? "",
+    splitType: entry?.splitType ?? "default",
+    customShares,
+    assignedUserId: entry?.assignedTo?.id ?? "",
   };
 };
 
@@ -49,9 +72,20 @@ type EntryFormProps = {
   onSaved: () => void;
   ledgerId: string;
   categories: readonly Category[];
+  /** 家族家計簿のときのみ支払者・按分方法の入力を表示する（FR-SPLIT）。 */
+  ledgerType: LedgerType;
+  members: readonly LedgerMember[];
+  /** ログイン中ユーザーのID。新規登録時の支払者の既定値に使う。 */
+  selfUserId: string | null;
   /** 指定時は編集モード。 */
   entry?: EntryListItem;
 };
+
+const SPLIT_TYPE_OPTIONS: { value: SplitType; label: string }[] = [
+  { value: "default", label: "既定比重で按分" },
+  { value: "custom", label: "この明細だけ独自の比重で按分" },
+  { value: "assigned", label: "1人に全額計上（肩代わり）" },
+];
 
 export const EntryFormModal = ({ isOpen, ...props }: EntryFormProps & { isOpen: boolean }) => (
   <Modal isOpen={isOpen} onClose={props.onClose} title={props.entry ? "明細を編集" : "明細を登録"}>
@@ -60,11 +94,23 @@ export const EntryFormModal = ({ isOpen, ...props }: EntryFormProps & { isOpen: 
   </Modal>
 );
 
-const EntryForm = ({ onClose, onSaved, ledgerId, categories, entry }: EntryFormProps) => {
+const EntryForm = ({
+  onClose,
+  onSaved,
+  ledgerId,
+  categories,
+  ledgerType,
+  members,
+  selfUserId,
+  entry,
+}: EntryFormProps) => {
   const { showToast } = useToast();
-  const [form, setForm] = useState<FormState>(() => buildInitialState(categories, entry));
+  const [form, setForm] = useState<FormState>(() =>
+    buildInitialState(categories, members, selfUserId, entry),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEdit = entry !== undefined;
+  const isFamily = ledgerType === "family";
   // 支払月をユーザーが手動編集したら、以降は利用日変更に追従させない
   const billingMonthTouched = useRef(false);
 
@@ -96,6 +142,22 @@ const EntryForm = ({ onClose, onSaved, ledgerId, categories, entry }: EntryFormP
         categoryId: form.categoryId,
         paymentMethod: form.paymentMethod.trim() === "" ? null : form.paymentMethod,
         memo: form.memo.trim() === "" ? null : form.memo,
+        ...(isFamily
+          ? {
+              paidByUserId: form.paidByUserId,
+              splitType: form.splitType,
+              splitShares:
+                form.splitType === "custom"
+                  ? members
+                      .map((member) => ({
+                        userId: member.userId,
+                        weight: Number(form.customShares[member.userId] ?? ""),
+                      }))
+                      .filter((share) => share.weight > 0)
+                  : null,
+              assignedUserId: form.splitType === "assigned" ? form.assignedUserId : null,
+            }
+          : {}),
       };
       if (isEdit) {
         await apiFetch(`/api/ledgers/${ledgerId}/entries/${entry.id}`, {
@@ -232,6 +294,105 @@ const EntryForm = ({ onClose, onSaved, ledgerId, categories, entry }: EntryFormP
           className={inputClass}
         />
       </div>
+      {isFamily && members.length >= 2 && (
+        <div className="space-y-4 rounded-lg border border-border p-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="entry-paid-by" className="block text-sm font-medium text-foreground">
+                支払者
+              </label>
+              <select
+                id="entry-paid-by"
+                required
+                value={form.paidByUserId}
+                onChange={(event) => set("paidByUserId", event.target.value)}
+                className={inputClass}
+              >
+                {members.map((member) => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="entry-split-type"
+                className="block text-sm font-medium text-foreground"
+              >
+                按分方法
+              </label>
+              <select
+                id="entry-split-type"
+                required
+                value={form.splitType}
+                onChange={(event) => set("splitType", event.target.value as SplitType)}
+                className={inputClass}
+              >
+                {SPLIT_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {form.splitType === "custom" && (
+            <div>
+              <span className="block text-sm font-medium text-foreground">独自の比重</span>
+              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {members.map((member) => (
+                  <div key={member.userId} className="flex items-center gap-2">
+                    <span className="w-24 truncate text-sm text-muted">{member.displayName}</span>
+                    <input
+                      aria-label={`${member.displayName}の独自比重`}
+                      type="number"
+                      min={1}
+                      required
+                      value={form.customShares[member.userId] ?? ""}
+                      onChange={(event) =>
+                        set("customShares", {
+                          ...form.customShares,
+                          [member.userId]: event.target.value,
+                        })
+                      }
+                      className={inputClass}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {form.splitType === "assigned" && (
+            <div>
+              <label
+                htmlFor="entry-assigned-user"
+                className="block text-sm font-medium text-foreground"
+              >
+                計上先メンバー
+              </label>
+              <select
+                id="entry-assigned-user"
+                required
+                value={form.assignedUserId}
+                onChange={(event) => set("assignedUserId", event.target.value)}
+                className={inputClass}
+              >
+                <option value="" disabled>
+                  選択してください
+                </option>
+                {members.map((member) => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onClose}>
           キャンセル
