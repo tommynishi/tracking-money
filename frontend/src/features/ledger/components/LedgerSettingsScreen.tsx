@@ -2,7 +2,7 @@
 
 /**
  * SCR-06 家計簿設定（screen.md・FR-LEDGER-07/08・FR-INVITE-01/05/06）。
- * 対象帳簿の選択・名称変更・メンバー管理・招待送信・帳簿削除。
+ * 名称変更・メンバー管理・招待送信・帳簿削除。対象帳簿はヘッダーの切替（LedgerSwitcher）に従う。
  */
 import { useCallback, useEffect, useState } from "react";
 
@@ -11,10 +11,18 @@ import { Button } from "@/shared/components/Button";
 import { Modal } from "@/shared/components/Modal";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 
-import type { LedgerMember } from "../types";
+import { useMe } from "@/features/auth/hooks/useMe";
 
-type LedgerSummary = { id: string; type: "personal" | "family"; name: string; role: string };
-type LedgerDetail = LedgerSummary & { role: "owner" | "member"; memberCount: number };
+import { useActiveLedger } from "../context/ActiveLedgerProvider";
+import type { LedgerMember, LedgerType, MemberRole } from "../types";
+
+type LedgerDetail = {
+  id: string;
+  type: LedgerType;
+  name: string;
+  role: MemberRole;
+  memberCount: number;
+};
 type SearchedUser = { id: string; displayName: string; avatarUrl: string | null };
 
 const inputClass =
@@ -22,12 +30,18 @@ const inputClass =
 
 export const LedgerSettingsScreen = () => {
   const { showToast } = useToast();
-  const [ledgers, setLedgers] = useState<LedgerSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const {
+    ledgers,
+    activeLedgerId: selectedId,
+    state: ledgerState,
+    selectLedger,
+    reload: reloadLedgers,
+  } = useActiveLedger();
+  const { me } = useMe();
+  const meId = me?.id ?? null;
   const [detail, setDetail] = useState<LedgerDetail | null>(null);
   const [members, setMembers] = useState<LedgerMember[]>([]);
-  const [meId, setMeId] = useState<string | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [detailError, setDetailError] = useState(false);
 
   const [name, setName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -43,23 +57,6 @@ export const LedgerSettingsScreen = () => {
   const [weightDrafts, setWeightDrafts] = useState<Record<string, number>>({});
   const [isSavingWeights, setIsSavingWeights] = useState(false);
 
-  const loadLedgers = useCallback(
-    (): Promise<void> =>
-      Promise.all([apiFetch<LedgerSummary[]>("/api/ledgers"), apiFetch<{ id: string }>("/api/me")])
-        .then(([ledgersResult, meResult]) => {
-          setLedgers(ledgersResult.data);
-          setMeId(meResult.data.id);
-          setSelectedId((current) => current ?? ledgersResult.data[0]?.id ?? null);
-          setState("ready");
-        })
-        .catch(() => setState("error")),
-    [],
-  );
-
-  useEffect(() => {
-    void loadLedgers();
-  }, [loadLedgers]);
-
   const loadDetail = useCallback((): Promise<void> => {
     if (selectedId === null) return Promise.resolve();
     return Promise.all([
@@ -74,7 +71,7 @@ export const LedgerSettingsScreen = () => {
           Object.fromEntries(membersResult.data.map((member) => [member.userId, member.weight])),
         );
       })
-      .catch(() => setState("error"));
+      .catch(() => setDetailError(true));
   }, [selectedId]);
 
   useEffect(() => {
@@ -94,7 +91,7 @@ export const LedgerSettingsScreen = () => {
         body: JSON.stringify({ name }),
       });
       showToast({ type: "success", message: "名称を変更しました" });
-      await Promise.all([loadLedgers(), loadDetail()]);
+      await Promise.all([reloadLedgers(), loadDetail()]);
     } catch (error) {
       notifyError(error, "名称の変更に失敗しました");
     } finally {
@@ -158,8 +155,8 @@ export const LedgerSettingsScreen = () => {
       });
       showToast({ type: "success", message: "家族家計簿を作成しました" });
       setFamilyName("");
-      setSelectedId(data.id);
-      await loadLedgers();
+      await reloadLedgers();
+      selectLedger(data.id);
     } catch (error) {
       notifyError(error, "家族家計簿の作成に失敗しました");
     } finally {
@@ -201,10 +198,10 @@ export const LedgerSettingsScreen = () => {
     }
   };
 
-  if (state === "loading") {
+  if (ledgerState === "loading") {
     return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
   }
-  if (state === "error") {
+  if (ledgerState === "error" || detailError) {
     return (
       <section className="rounded-lg border border-border bg-surface p-6 text-center">
         <p className="text-sm text-danger">情報の取得に失敗しました。</p>
@@ -212,8 +209,9 @@ export const LedgerSettingsScreen = () => {
           className="mt-4"
           variant="secondary"
           onClick={() => {
-            setState("loading");
-            void loadLedgers();
+            setDetailError(false);
+            void reloadLedgers();
+            void loadDetail();
           }}
         >
           再試行
@@ -235,18 +233,7 @@ export const LedgerSettingsScreen = () => {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-foreground">家計簿設定</h1>
-        <select
-          aria-label="対象の家計簿"
-          value={selectedId ?? ""}
-          onChange={(event) => setSelectedId(event.target.value)}
-          className={inputClass}
-        >
-          {ledgers.map((ledger) => (
-            <option key={ledger.id} value={ledger.id}>
-              {ledger.name}（{ledger.type === "personal" ? "個人" : "家族"}）
-            </option>
-          ))}
-        </select>
+        <p className="text-xs text-muted">対象の家計簿はヘッダーの切替で変更できます。</p>
       </div>
 
       {(() => {

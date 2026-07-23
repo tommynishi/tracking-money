@@ -13,16 +13,11 @@ import { useToast } from "@/shared/components/toast/ToastProvider";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
 import { currentBillingMonth } from "@/shared/utils/month";
 
+import { useMe } from "@/features/auth/hooks/useMe";
 import type { Category } from "@/features/category/types";
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
-import type { LedgerMember, LedgerType } from "@/features/ledger/types";
-
-type Me = {
-  readonly id: string;
-  readonly personalLedgerId: string | null;
-  readonly familyLedgerId: string | null;
-};
-type LedgerDetail = { readonly type: LedgerType };
+import { useActiveLedger } from "@/features/ledger/context/ActiveLedgerProvider";
+import type { LedgerMember } from "@/features/ledger/types";
 
 type SavedMapping = {
   readonly id: string;
@@ -90,6 +85,9 @@ const SOURCE_LABELS: Record<PreviewRow["categorySource"], string> = {
 };
 
 const STEPS = ["ファイル選択", "プレビュー確認", "結果"] as const;
+
+/** 個人家計簿でのメンバー空配列（毎レンダーの新規生成を避ける）。 */
+const NO_MEMBERS: LedgerMember[] = [];
 
 /** 明細プレビュー行の支払者・按分方法の入力（家族家計簿限定・FR-SPLIT）。 */
 const SplitRowFields = ({
@@ -174,12 +172,19 @@ const SplitRowFields = ({
 
 export const ImportWizardScreen = () => {
   const { showToast } = useToast();
-  const [ledgerId, setLedgerId] = useState<string | null>(null);
-  const [needsSetup, setNeedsSetup] = useState(false);
-  const [meError, setMeError] = useState(false);
-  const [meId, setMeId] = useState<string | null>(null);
-  const [ledgerType, setLedgerType] = useState<LedgerType>("personal");
-  const [members, setMembers] = useState<LedgerMember[]>([]);
+  const {
+    activeLedgerId: ledgerId,
+    activeLedger,
+    ledgers,
+    state: ledgerState,
+    reload: reloadLedgers,
+  } = useActiveLedger();
+  const { me } = useMe();
+  const meId = me?.id ?? null;
+  const ledgerType = activeLedger?.type ?? "personal";
+  const [fetchedMembers, setFetchedMembers] = useState<LedgerMember[]>([]);
+  // 個人家計簿では按分・支払者の選択を行わないため、メンバーは空として扱う
+  const members = ledgerType === "family" ? fetchedMembers : NO_MEMBERS;
 
   const [step, setStep] = useState(0);
   const [file, setFile] = useState<File | null>(null);
@@ -205,20 +210,6 @@ export const ImportWizardScreen = () => {
   const [result, setResult] = useState<ConfirmResult | null>(null);
 
   useEffect(() => {
-    void apiFetch<Me>("/api/me")
-      .then(({ data }) => {
-        setMeId(data.id);
-        const resolved = data.personalLedgerId ?? data.familyLedgerId;
-        if (resolved === null) {
-          setNeedsSetup(true);
-        } else {
-          setLedgerId(resolved);
-        }
-      })
-      .catch(() => setMeError(true));
-  }, []);
-
-  useEffect(() => {
     if (ledgerId === null) return;
     void apiFetch<SavedMapping[]>(`/api/ledgers/${ledgerId}/csv-mappings`)
       .then(({ data }) => setSavedMappings(data))
@@ -230,20 +221,11 @@ export const ImportWizardScreen = () => {
 
   // 按分・精算（FR-SPLIT）は家族家計簿限定。行ごとの支払者選択に使う
   useEffect(() => {
-    if (ledgerId === null) return;
-    void apiFetch<LedgerDetail>(`/api/ledgers/${ledgerId}`)
-      .then(({ data }) => {
-        setLedgerType(data.type);
-        if (data.type === "family") {
-          return apiFetch<LedgerMember[]>(`/api/ledgers/${ledgerId}/members`).then(({ data: m }) =>
-            setMembers(m),
-          );
-        }
-        setMembers([]);
-        return undefined;
-      })
+    if (ledgerId === null || ledgerType !== "family") return;
+    void apiFetch<LedgerMember[]>(`/api/ledgers/${ledgerId}/members`)
+      .then(({ data }) => setFetchedMembers(data))
       .catch(() => showToast({ type: "error", message: "家計簿情報の取得に失敗しました" }));
-  }, [ledgerId, showToast]);
+  }, [ledgerId, ledgerType, showToast]);
 
   const inlineMapping = useCallback(
     () => ({
@@ -405,17 +387,10 @@ export const ImportWizardScreen = () => {
     setRows((current) => current.map((row) => ({ ...row, include })));
   };
 
-  if (needsSetup) {
-    return (
-      <LedgerSetup
-        onCreated={(createdLedgerId) => {
-          setNeedsSetup(false);
-          setLedgerId(createdLedgerId);
-        }}
-      />
-    );
+  if (ledgerState === "ready" && ledgers.length === 0) {
+    return <LedgerSetup onCreated={() => void reloadLedgers()} />;
   }
-  if (meError) {
+  if (ledgerState === "error") {
     return <p className="text-sm text-danger">読み込みに失敗しました。再読み込みしてください。</p>;
   }
   if (ledgerId === null) {

@@ -1,18 +1,18 @@
 /**
  * 認証後画面の共通レイアウト（ヘッダー＋本文・ui-rules §1）。
- * Auth・route group 導入（schedule 1-2）後、認証済みレイアウトから利用する。
- * 帳簿切替（ledger switcher）は ledgers API（1-2/1-5）に依存するため後続スライスで追加する。
+ * ヘッダーには全画面共通の家計簿切替（LedgerSwitcher）を常時表示する。
  */
 import Link from "next/link";
 
 import { ThemeToggle } from "@/shared/theme/ThemeToggle";
 
-/** グローバルナビゲーション（screen.md 3.1）。 */
+import { LedgerSwitcher } from "@/features/ledger/components/LedgerSwitcher";
+
+/** グローバルナビゲーション（screen.md 3.1）。取込履歴は取込画面から遷移する。 */
 const NAV_ITEMS = [
   { href: "/dashboard", label: "ダッシュボード" },
   { href: "/entries", label: "明細" },
   { href: "/import", label: "取込" },
-  { href: "/imports", label: "取込履歴" },
   { href: "/analysis", label: "分析" },
   { href: "/categories", label: "カテゴリ" },
   { href: "/ledger", label: "家計簿" },
@@ -35,6 +35,7 @@ export const AppShell = ({
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-3">
           <span className="text-base font-semibold text-foreground">Tracking Money</span>
           <div className="flex items-center gap-2">
+            <LedgerSwitcher />
             {actions}
             <ThemeToggle />
           </div>

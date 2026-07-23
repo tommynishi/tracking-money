@@ -14,7 +14,7 @@ import { Modal } from "@/shared/components/Modal";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 import { formatDateTime } from "@/shared/utils/format";
 
-type Me = { readonly personalLedgerId: string | null; readonly familyLedgerId: string | null };
+import { useActiveLedger } from "@/features/ledger/context/ActiveLedgerProvider";
 
 type ImportHistoryItem = {
   readonly id: string;
@@ -45,7 +45,7 @@ const STATUS_LABELS: Record<ImportHistoryItem["status"], string> = {
 
 export const ImportHistoryScreen = () => {
   const { showToast } = useToast();
-  const [ledgerId, setLedgerId] = useState<string | null>(null);
+  const { activeLedgerId: ledgerId, state: ledgerState } = useActiveLedger();
   const [loadError, setLoadError] = useState(false);
   const [items, setItems] = useState<ImportHistoryItem[]>([]);
   const [meta, setMeta] = useState<ListMeta | null>(null);
@@ -53,12 +53,6 @@ export const ImportHistoryScreen = () => {
   const [detail, setDetail] = useState<ImportDetail | null>(null);
   const [deleting, setDeleting] = useState<ImportHistoryItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    void apiFetch<Me>("/api/me")
-      .then(({ data }) => setLedgerId(data.personalLedgerId ?? data.familyLedgerId))
-      .catch(() => setLoadError(true));
-  }, []);
 
   const loadItems = useCallback((): Promise<void> => {
     if (ledgerId === null) return Promise.resolve();
@@ -104,7 +98,7 @@ export const ImportHistoryScreen = () => {
     }
   };
 
-  if (loadError) {
+  if (loadError || ledgerState === "error") {
     return <p className="text-sm text-danger">読み込みに失敗しました。再読み込みしてください。</p>;
   }
   if (ledgerId === null) {
