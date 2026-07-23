@@ -71,17 +71,17 @@ describe("dayOfMonth / lastDayOfMonth / diffDays", () => {
 });
 
 describe("currentBillingMonth", () => {
-  it("10日を含めそれ以前は当月", () => {
+  it("月内はいつでも当月（暦月）を返す", () => {
     expect(currentBillingMonth(new Date("2026-07-01T03:00:00Z"))).toBe("2026-07"); // JST 7/1
-    expect(currentBillingMonth(new Date("2026-07-10T14:59:00Z"))).toBe("2026-07"); // JST 7/10 23:59
+    expect(currentBillingMonth(new Date("2026-07-22T03:00:00Z"))).toBe("2026-07"); // JST 7/22
+    expect(currentBillingMonth(new Date("2026-07-31T14:59:00Z"))).toBe("2026-07"); // JST 7/31 23:59
   });
 
-  it("10日を超えたら翌月", () => {
-    expect(currentBillingMonth(new Date("2026-07-10T15:01:00Z"))).toBe("2026-08"); // JST 7/11 00:01
-    expect(currentBillingMonth(new Date("2026-07-25T03:00:00Z"))).toBe("2026-08"); // JST 7/25
+  it("月が替われば翌月になる", () => {
+    expect(currentBillingMonth(new Date("2026-07-31T15:01:00Z"))).toBe("2026-08"); // JST 8/1 00:01
   });
 
   it("年をまたぐ場合も正しく繰り上がる", () => {
-    expect(currentBillingMonth(new Date("2026-12-25T03:00:00Z"))).toBe("2027-01"); // JST 12/25
+    expect(currentBillingMonth(new Date("2026-12-31T15:01:00Z"))).toBe("2027-01"); // JST 1/1
   });
 });

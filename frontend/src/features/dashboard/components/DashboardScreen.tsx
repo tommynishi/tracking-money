@@ -13,11 +13,7 @@ import { formatAmount, formatDateList } from "@/shared/utils/format";
 import { currentBillingMonth } from "@/shared/utils/month";
 
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
-
-type Me = {
-  readonly personalLedgerId: string | null;
-  readonly familyLedgerId: string | null;
-};
+import { useActiveLedger } from "@/features/ledger/context/ActiveLedgerProvider";
 
 type CategoryAmount = { readonly categoryId: string; readonly categoryName: string; readonly amount: number };
 type RecentEntry = {
@@ -49,9 +45,12 @@ const diffRate = (current: number, base: number): string | null => {
 };
 
 export const DashboardScreen = () => {
-  const [ledgerId, setLedgerId] = useState<string | null>(null);
-  const [meState, setMeState] = useState<LoadState>("loading");
-  const [needsSetup, setNeedsSetup] = useState(false);
+  const {
+    activeLedgerId: ledgerId,
+    ledgers,
+    state: ledgerState,
+    reload: reloadLedgers,
+  } = useActiveLedger();
 
   const [month] = useState(currentMonth());
   const [data, setData] = useState<DashboardData | null>(null);
@@ -59,26 +58,6 @@ export const DashboardScreen = () => {
 
   const [insight, setInsight] = useState<Insight | null>(null);
   const [insightState, setInsightState] = useState<LoadState>("loading");
-
-  const loadMe = useCallback(
-    (): Promise<void> =>
-      apiFetch<Me>("/api/me")
-        .then(({ data: me }) => {
-          const resolved = me.personalLedgerId ?? me.familyLedgerId;
-          if (resolved === null) {
-            setNeedsSetup(true);
-          } else {
-            setLedgerId(resolved);
-          }
-          setMeState("ready");
-        })
-        .catch(() => setMeState("error")),
-    [],
-  );
-
-  useEffect(() => {
-    void loadMe();
-  }, [loadMe]);
 
   const loadDashboard = useCallback((): Promise<void> => {
     if (ledgerId === null) return Promise.resolve();
@@ -106,28 +85,21 @@ export const DashboardScreen = () => {
       .catch(() => setInsightState("error"));
   }, [ledgerId, month]);
 
-  if (meState === "loading") {
+  if (ledgerState === "loading") {
     return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
   }
-  if (meState === "error") {
+  if (ledgerState === "error") {
     return (
       <section className="rounded-lg border border-border bg-surface p-6 text-center">
-        <p className="text-sm text-danger">ユーザー情報の取得に失敗しました。</p>
-        <Button className="mt-4" variant="secondary" onClick={() => void loadMe()}>
+        <p className="text-sm text-danger">家計簿情報の取得に失敗しました。</p>
+        <Button className="mt-4" variant="secondary" onClick={() => void reloadLedgers()}>
           再試行
         </Button>
       </section>
     );
   }
-  if (needsSetup) {
-    return (
-      <LedgerSetup
-        onCreated={(createdLedgerId) => {
-          setNeedsSetup(false);
-          setLedgerId(createdLedgerId);
-        }}
-      />
-    );
+  if (ledgers.length === 0) {
+    return <LedgerSetup onCreated={() => void reloadLedgers()} />;
   }
   if (ledgerId === null) return null;
 

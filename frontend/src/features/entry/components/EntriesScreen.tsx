@@ -14,20 +14,17 @@ import { useToast } from "@/shared/components/toast/ToastProvider";
 import { formatAmount, formatDateList } from "@/shared/utils/format";
 import { currentBillingMonth } from "@/shared/utils/month";
 
+import { useMe } from "@/features/auth/hooks/useMe";
 import type { Category } from "@/features/category/types";
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
-import type { LedgerMember, LedgerType } from "@/features/ledger/types";
+import { useActiveLedger } from "@/features/ledger/context/ActiveLedgerProvider";
+import type { LedgerMember } from "@/features/ledger/types";
 
 import type { EntryListItem } from "../types";
 import { EntryFormModal } from "./EntryFormModal";
 
-type Me = {
-  readonly id: string;
-  readonly personalLedgerId: string | null;
-  readonly familyLedgerId: string | null;
-};
-
-type LedgerDetail = { readonly type: LedgerType };
+/** 個人家計簿でのメンバー空配列（毎レンダーの新規生成を避ける）。 */
+const NO_MEMBERS: LedgerMember[] = [];
 
 /** 支払者・按分方法の要約バッジ文言（家族家計簿限定・FR-SPLIT）。 */
 const splitBadgeText = (entry: EntryListItem): string => {
@@ -45,14 +42,21 @@ type LoadState = "loading" | "ready" | "error";
 
 export const EntriesScreen = () => {
   const { showToast } = useToast();
-  const [ledgerId, setLedgerId] = useState<string | null>(null);
-  const [meId, setMeId] = useState<string | null>(null);
-  const [meState, setMeState] = useState<LoadState>("loading");
-  const [needsSetup, setNeedsSetup] = useState(false);
+  const {
+    activeLedgerId: ledgerId,
+    activeLedger,
+    ledgers,
+    state: ledgerState,
+    reload: reloadLedgers,
+  } = useActiveLedger();
+  const { me } = useMe();
+  const meId = me?.id ?? null;
+  const ledgerType = activeLedger?.type ?? "personal";
 
   const [categories, setCategories] = useState<Category[]>([]);
-  const [ledgerType, setLedgerType] = useState<LedgerType>("personal");
-  const [members, setMembers] = useState<LedgerMember[]>([]);
+  const [fetchedMembers, setFetchedMembers] = useState<LedgerMember[]>([]);
+  // 個人家計簿では按分・支払者の選択を行わないため、メンバーは空として扱う
+  const members = ledgerType === "family" ? fetchedMembers : NO_MEMBERS;
   const [entries, setEntries] = useState<EntryListItem[]>([]);
   const [meta, setMeta] = useState<ListMeta | null>(null);
   const [listState, setListState] = useState<LoadState>("loading");
@@ -66,29 +70,6 @@ export const EntriesScreen = () => {
   const [deletingEntry, setDeletingEntry] = useState<EntryListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // effect 内での同期 setState を避けるため、"loading" への遷移は呼び出し側（イベントハンドラ）で行い、
-  // 結果の反映はレスポンス到着後のコールバックで行う
-  const loadMe = useCallback(
-    (): Promise<void> =>
-      apiFetch<Me>("/api/me")
-        .then(({ data }) => {
-          setMeId(data.id);
-          const resolved = data.personalLedgerId ?? data.familyLedgerId;
-          if (resolved === null) {
-            setNeedsSetup(true);
-          } else {
-            setLedgerId(resolved);
-          }
-          setMeState("ready");
-        })
-        .catch(() => setMeState("error")),
-    [],
-  );
-
-  useEffect(() => {
-    void loadMe();
-  }, [loadMe]);
-
   useEffect(() => {
     if (ledgerId === null) return;
     void apiFetch<Category[]>(`/api/ledgers/${ledgerId}/categories`)
@@ -96,22 +77,13 @@ export const EntriesScreen = () => {
       .catch(() => showToast({ type: "error", message: "カテゴリの取得に失敗しました" }));
   }, [ledgerId, showToast]);
 
-  // 按分・精算（FR-SPLIT）は家族家計簿限定。type とメンバー一覧は明細フォームの支払者選択に使う
+  // 按分・精算（FR-SPLIT）は家族家計簿限定。メンバー一覧は明細フォームの支払者選択に使う
   useEffect(() => {
-    if (ledgerId === null) return;
-    void apiFetch<LedgerDetail>(`/api/ledgers/${ledgerId}`)
-      .then(({ data }) => {
-        setLedgerType(data.type);
-        if (data.type === "family") {
-          return apiFetch<LedgerMember[]>(`/api/ledgers/${ledgerId}/members`).then(({ data: m }) =>
-            setMembers(m),
-          );
-        }
-        setMembers([]);
-        return undefined;
-      })
+    if (ledgerId === null || ledgerType !== "family") return;
+    void apiFetch<LedgerMember[]>(`/api/ledgers/${ledgerId}/members`)
+      .then(({ data }) => setFetchedMembers(data))
       .catch(() => showToast({ type: "error", message: "家計簿情報の取得に失敗しました" }));
-  }, [ledgerId, showToast]);
+  }, [ledgerId, ledgerType, showToast]);
 
   const loadEntries = useCallback((): Promise<void> => {
     if (ledgerId === null) return Promise.resolve();
@@ -148,35 +120,21 @@ export const EntriesScreen = () => {
     }
   };
 
-  if (meState === "loading") {
+  if (ledgerState === "loading") {
     return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
   }
-  if (meState === "error") {
+  if (ledgerState === "error") {
     return (
       <section className="rounded-lg border border-border bg-surface p-6 text-center">
-        <p className="text-sm text-danger">ユーザー情報の取得に失敗しました。</p>
-        <Button
-          className="mt-4"
-          variant="secondary"
-          onClick={() => {
-            setMeState("loading");
-            void loadMe();
-          }}
-        >
+        <p className="text-sm text-danger">家計簿情報の取得に失敗しました。</p>
+        <Button className="mt-4" variant="secondary" onClick={() => void reloadLedgers()}>
           再試行
         </Button>
       </section>
     );
   }
-  if (needsSetup) {
-    return (
-      <LedgerSetup
-        onCreated={(createdLedgerId) => {
-          setNeedsSetup(false);
-          setLedgerId(createdLedgerId);
-        }}
-      />
-    );
+  if (ledgers.length === 0) {
+    return <LedgerSetup onCreated={() => void reloadLedgers()} />;
   }
   if (ledgerId === null) return null;
 

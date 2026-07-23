@@ -12,8 +12,8 @@ import { formatAmount, formatDateList } from "@/shared/utils/format";
 import { currentBillingMonth } from "@/shared/utils/month";
 
 import { LedgerSetup } from "@/features/ledger/components/LedgerSetup";
+import { useActiveLedger } from "@/features/ledger/context/ActiveLedgerProvider";
 
-type Me = { readonly personalLedgerId: string | null; readonly familyLedgerId: string | null };
 type LoadState = "loading" | "ready" | "error";
 
 type CategoryAmount = { readonly categoryId: string; readonly categoryName: string; readonly amount: number };
@@ -40,8 +40,6 @@ type SubscriptionCandidate = {
   readonly occurrences: number;
 };
 type Insight = { readonly generatedAt: string; readonly insight: { readonly summary: string; readonly points: string[] } };
-
-type LedgerDetail = { readonly type: "personal" | "family" };
 
 type SettlementMemberResult = {
   readonly userId: string;
@@ -168,49 +166,34 @@ const TrendChart = ({ points }: { points: TrendPoint[] }) => {
 };
 
 export const AnalysisScreen = () => {
-  const [ledgerId, setLedgerId] = useState<string | null>(null);
-  const [ledgerType, setLedgerType] = useState<"personal" | "family">("personal");
-  const [meState, setMeState] = useState<LoadState>("loading");
-  const [needsSetup, setNeedsSetup] = useState(false);
+  const {
+    activeLedgerId: ledgerId,
+    activeLedger,
+    ledgers,
+    state: ledgerState,
+    reload: reloadLedgers,
+  } = useActiveLedger();
   const [month, setMonth] = useState(currentMonth());
   const [tab, setTab] = useState<Tab>("summary");
 
-  useEffect(() => {
-    apiFetch<Me>("/api/me")
-      .then(({ data }) => {
-        const resolved = data.personalLedgerId ?? data.familyLedgerId;
-        if (resolved === null) {
-          setNeedsSetup(true);
-        } else {
-          setLedgerId(resolved);
-        }
-        setMeState("ready");
-      })
-      .catch(() => setMeState("error"));
-  }, []);
-
   // 精算タブ（FR-SPLIT）は家族家計簿のときのみ表示する
-  useEffect(() => {
-    if (ledgerId === null) return;
-    apiFetch<LedgerDetail>(`/api/ledgers/${ledgerId}`)
-      .then(({ data }) => setLedgerType(data.type))
-      .catch(() => undefined);
-  }, [ledgerId]);
+  const tabs =
+    activeLedger?.type === "family" ? [...TABS, { key: "settlement" as const, label: "精算" }] : TABS;
+  // 精算タブ選択中に個人家計簿へ切り替えた場合は既定タブへ戻す
+  const activeTab: Tab = tabs.some((candidate) => candidate.key === tab) ? tab : "summary";
 
-  const tabs = ledgerType === "family" ? [...TABS, { key: "settlement" as const, label: "精算" }] : TABS;
-
-  if (meState === "loading") {
+  if (ledgerState === "loading") {
     return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
   }
-  if (meState === "error") {
+  if (ledgerState === "error") {
     return (
       <section className="rounded-lg border border-border bg-surface p-6 text-center">
-        <p className="text-sm text-danger">ユーザー情報の取得に失敗しました。</p>
+        <p className="text-sm text-danger">家計簿情報の取得に失敗しました。</p>
       </section>
     );
   }
-  if (needsSetup) {
-    return <LedgerSetup onCreated={(createdLedgerId) => { setNeedsSetup(false); setLedgerId(createdLedgerId); }} />;
+  if (ledgers.length === 0) {
+    return <LedgerSetup onCreated={() => void reloadLedgers()} />;
   }
   if (ledgerId === null) return null;
 
@@ -237,10 +220,10 @@ export const AnalysisScreen = () => {
           <button
             key={t.key}
             role="tab"
-            aria-selected={tab === t.key}
+            aria-selected={activeTab === t.key}
             onClick={() => setTab(t.key)}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
-              tab === t.key ? "bg-primary text-primary-foreground" : "text-muted hover:text-foreground"
+              activeTab === t.key ? "bg-primary text-primary-foreground" : "text-muted hover:text-foreground"
             }`}
           >
             {t.label}
@@ -248,22 +231,18 @@ export const AnalysisScreen = () => {
         ))}
       </div>
 
-      {tab === "summary" && <SummaryTab ledgerId={ledgerId} month={month} />}
-      {tab === "trend" && <TrendTab ledgerId={ledgerId} month={month} />}
-      {tab === "ranking" && <RankingTab ledgerId={ledgerId} month={month} />}
-      {tab === "fixed_cost" && (
-        <>
-          <InsightCard ledgerId={ledgerId} type="fixed_cost" month={month} />
-        </>
-      )}
-      {tab === "subscriptions" && <SubscriptionsTab ledgerId={ledgerId} month={month} />}
-      {tab === "advice" && (
+      {activeTab === "summary" && <SummaryTab ledgerId={ledgerId} month={month} />}
+      {activeTab === "trend" && <TrendTab ledgerId={ledgerId} month={month} />}
+      {activeTab === "ranking" && <RankingTab ledgerId={ledgerId} month={month} />}
+      {activeTab === "fixed_cost" && <InsightCard ledgerId={ledgerId} type="fixed_cost" month={month} />}
+      {activeTab === "subscriptions" && <SubscriptionsTab ledgerId={ledgerId} month={month} />}
+      {activeTab === "advice" && (
         <div className="space-y-4">
           <InsightCard ledgerId={ledgerId} type="saving_advice" month={month} />
           <InsightCard ledgerId={ledgerId} type="forecast" month={month} />
         </div>
       )}
-      {tab === "settlement" && <SettlementTab ledgerId={ledgerId} month={month} />}
+      {activeTab === "settlement" && <SettlementTab ledgerId={ledgerId} month={month} />}
     </section>
   );
 };

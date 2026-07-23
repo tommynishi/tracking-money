@@ -11,7 +11,7 @@ import { Button } from "@/shared/components/Button";
 import { Modal } from "@/shared/components/Modal";
 import { useToast } from "@/shared/components/toast/ToastProvider";
 
-import { useMe } from "@/features/auth/hooks/useMe";
+import { useActiveLedger } from "@/features/ledger/context/ActiveLedgerProvider";
 
 import type { Category } from "../types";
 
@@ -20,8 +20,11 @@ const inputClass =
 
 export const CategoriesScreen = () => {
   const { showToast } = useToast();
-  const { me, state: meState, retry } = useMe();
-  const ledgerId = me === null ? null : (me.personalLedgerId ?? me.familyLedgerId);
+  const {
+    activeLedgerId: ledgerId,
+    state: ledgerState,
+    reload: reloadLedgers,
+  } = useActiveLedger();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
@@ -122,17 +125,17 @@ export const CategoriesScreen = () => {
     }
   };
 
-  if (meState === "loading") {
+  if (ledgerState === "loading") {
     return <div className="h-40 animate-pulse rounded-lg border border-border bg-surface" />;
   }
-  if (meState === "error" || ledgerId === null) {
+  if (ledgerState === "error" || ledgerId === null) {
     return (
       <section className="rounded-lg border border-border bg-surface p-6 text-center">
         <p className="text-sm text-danger">
-          {meState === "error" ? "ユーザー情報の取得に失敗しました。" : "家計簿がまだありません。"}
+          {ledgerState === "error" ? "家計簿情報の取得に失敗しました。" : "家計簿がまだありません。"}
         </p>
-        {meState === "error" && (
-          <Button className="mt-4" variant="secondary" onClick={retry}>
+        {ledgerState === "error" && (
+          <Button className="mt-4" variant="secondary" onClick={() => void reloadLedgers()}>
             再試行
           </Button>
         )}

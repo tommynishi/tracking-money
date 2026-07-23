@@ -9,6 +9,8 @@ import { AppShell } from "@/shared/components/AppShell";
 import { buttonClassName } from "@/shared/components/buttonStyles";
 import { ToastProvider } from "@/shared/components/toast/ToastProvider";
 
+import { ActiveLedgerProvider } from "@/features/ledger/context/ActiveLedgerProvider";
+
 const LogoutButton = () => (
   <form
     action={async () => {
@@ -30,7 +32,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   return (
     <ToastProvider>
-      <AppShell actions={<LogoutButton />}>{children}</AppShell>
+      <ActiveLedgerProvider>
+        <AppShell actions={<LogoutButton />}>{children}</AppShell>
+      </ActiveLedgerProvider>
     </ToastProvider>
   );
 }
